@@ -1,0 +1,238 @@
+# =============================================================================
+# tab_group.R — "GROUP BY" aggregation walkthrough (Tab 5)
+#
+# Five gated steps (whole-table aggregates; GROUP BY; COUNT(*) vs COUNT(col) and
+# NULLs; HAVING vs WHERE; multi-column grouping) then a 10-question quest.
+# Prompts name the required output column (e.g. "as n") so the result-set
+# grader's column-name check is unambiguous.
+# =============================================================================
+
+GROUP_QUEST <- list(
+  list(prompt = "How many researchers are there? Return a single column named n.",
+       ref = "SELECT COUNT(*) AS n FROM researchers;", ordered = FALSE,
+       solution = "SELECT COUNT(*) AS n FROM researchers;"),
+  list(prompt = "Return the average researcher salary as a column named avg_salary.",
+       ref = "SELECT AVG(salary) AS avg_salary FROM researchers;", ordered = FALSE,
+       solution = "SELECT AVG(salary) AS avg_salary FROM researchers;"),
+  list(prompt = "For each title, return the title and the number of researchers with it as n.",
+       ref = "SELECT title, COUNT(*) AS n FROM researchers GROUP BY title;", ordered = FALSE,
+       solution = "SELECT title, COUNT(*) AS n FROM researchers GROUP BY title;"),
+  list(prompt = "For each study status, return the status and the number of studies as n.",
+       ref = "SELECT status, COUNT(*) AS n FROM studies GROUP BY status;", ordered = FALSE,
+       solution = "SELECT status, COUNT(*) AS n FROM studies GROUP BY status;"),
+  list(prompt = "For each status, return the status and the average sample_size as avg_n.",
+       ref = "SELECT status, AVG(sample_size) AS avg_n FROM studies GROUP BY status;", ordered = FALSE,
+       solution = "SELECT status, AVG(sample_size) AS avg_n FROM studies GROUP BY status;"),
+  list(prompt = "For each participant species, return the species and the count as n.",
+       ref = "SELECT species, COUNT(*) AS n FROM participants GROUP BY species;", ordered = FALSE,
+       solution = "SELECT species, COUNT(*) AS n FROM participants GROUP BY species;"),
+  list(prompt = paste0("Return the youngest and oldest known participant age, as columns ",
+                       "youngest and oldest."),
+       ref = "SELECT MIN(age) AS youngest, MAX(age) AS oldest FROM participants;", ordered = FALSE,
+       solution = "SELECT MIN(age) AS youngest, MAX(age) AS oldest FROM participants;"),
+  list(prompt = paste0("Return each researcher title and its count as n, but only titles held ",
+                       "by more than one researcher. Use HAVING."),
+       ref = "SELECT title, COUNT(*) AS n FROM researchers GROUP BY title HAVING COUNT(*) > 1;",
+       ordered = FALSE,
+       solution = "SELECT title, COUNT(*) AS n FROM researchers GROUP BY title HAVING COUNT(*) > 1;"),
+  list(prompt = paste0("For each lab_id in the researchers table, return the lab_id and the ",
+                       "average salary as avg_salary. (The unaffiliated researcher forms a ",
+                       "NULL group — that's expected.)"),
+       ref = "SELECT lab_id, AVG(salary) AS avg_salary FROM researchers GROUP BY lab_id;",
+       ordered = FALSE,
+       solution = "SELECT lab_id, AVG(salary) AS avg_salary FROM researchers GROUP BY lab_id;"),
+  list(prompt = paste0("How many distinct labs have at least one researcher? Return a single ",
+                       "column named n_labs."),
+       ref = "SELECT COUNT(DISTINCT lab_id) AS n_labs FROM researchers;", ordered = FALSE,
+       solution = "SELECT COUNT(DISTINCT lab_id) AS n_labs FROM researchers;")
+)
+
+GROUP_STEP_TITLES <- c(
+  "Aggregate the whole table",
+  "One row per group with GROUP BY",
+  "COUNT(*) vs COUNT(column)",
+  "Filter groups with HAVING",
+  "Group by several columns"
+)
+
+source_group_server <- function(input, output, session) {
+
+  walk <- reactiveValues(step = 1)
+  output$group_step <- reactive(walk$step)
+  outputOptions(output, "group_step", suspendWhenHidden = FALSE)
+
+  observeEvent(input$group_continue1, walk$step <- max(walk$step, 2))
+  observeEvent(input$group_continue2, walk$step <- max(walk$step, 3))
+  observeEvent(input$group_continue3, walk$step <- max(walk$step, 4))
+  observeEvent(input$group_continue4, walk$step <- max(walk$step, 5))
+
+  output$group_toc <- renderUI(
+    walkthrough_toc(walk$step, GROUP_STEP_TITLES, "group-step"))
+
+  wire_demo_editors("gsed", 5, input, output, session)
+  wire_quest_editors(GROUP_QUEST, "grpq", input, output, session)
+
+  output$group_tab_ui <- renderUI({
+    div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
+      div(class = "row",
+        div(class = "col-lg-3 sidebar-col", uiOutput("group_toc")),
+        div(class = "col-lg-9",
+
+          scenario_card(
+            "GROUP BY — one row per group",
+            eyebrow = "Summarizing",
+            p(style = "margin-bottom:6px;",
+              "So far every query returned rows that already existed. Aggregation ",
+              "is different: it ", tags$b("collapses many rows into summaries"),
+              " — counts, totals, averages — optionally one summary per group."),
+            p(style = "margin-bottom:0;",
+              "For an R user: ", kbd("GROUP BY title"), " + ", kbd("COUNT(*)"),
+              " is ", kbd("group_by(title) |> summarise(n = n())"),
+              ", or ", kbd("aggregate()"), " / ", kbd("table()"), ".")
+          ),
+
+          # ===== STEP 1 =====
+          step_container(1, "Aggregate the whole table",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "Aggregate functions — ", tags$code("COUNT"), ", ", tags$code("SUM"),
+                ", ", tags$code("AVG"), ", ", tags$code("MIN"), ", ", tags$code("MAX"),
+                " — reduce a set of rows to a single value. With no ",
+                tags$code("GROUP BY"), " the whole table is one group, so you get ",
+                "one row back."),
+              plain = tagList(tags$b("In human words. "),
+                "Ask one summary question about the entire table: how many? what's ",
+                "the average? the biggest? You get a single-row answer."),
+              lab = tagList(tags$b("Lab database. "),
+                kbd("SELECT COUNT(*) FROM researchers"), " returns 12; ",
+                kbd("SELECT AVG(salary) FROM researchers"),
+                " returns the mean salary (of those who disclosed one).")
+            ),
+            sql_code("SELECT COUNT(*) AS n,\n       AVG(salary) AS avg_salary,\n       MAX(salary) AS top_salary\nFROM researchers;"),
+            sql_editor("gsed1", starter = "SELECT COUNT(*) AS n,\n       AVG(salary) AS avg_salary,\n       MAX(salary) AS top_salary\nFROM researchers;"),
+            callout_warm(tags$b("Name your summaries. "),
+              "An aggregate's default column name is the expression itself (",
+              kbd("COUNT(*)"), "). Give it a tidy alias with ", kbd("AS"),
+              " so the result reads — and grades — cleanly."),
+            continue_button("group_continue1"),
+            id_prefix = "group-step"
+          ),
+
+          # ===== STEP 2 =====
+          conditionalPanel("output.group_step >= 2",
+          step_container(2, "One row per group with GROUP BY",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                tags$code("GROUP BY"), " partitions rows into groups sharing the ",
+                "grouping key; each aggregate is then computed per group, yielding ",
+                "one output row per group. Non-aggregated columns in ",
+                tags$code("SELECT"), " must appear in ", tags$code("GROUP BY"), "."),
+              plain = tagList(tags$b("In human words. "),
+                "Split the table into piles by some column, then summarize each ",
+                "pile. “How many researchers ", tags$em("per title"), "?” is one ",
+                "row per title."),
+              lab = tagList(tags$b("Lab database. "),
+                kbd("SELECT title, COUNT(*) FROM researchers GROUP BY title"),
+                " returns four rows — one per job title — with its head count.")
+            ),
+            sql_code("SELECT title, COUNT(*) AS n\nFROM researchers\nGROUP BY title;"),
+            sql_editor("gsed2", starter = "SELECT title, COUNT(*) AS n\nFROM researchers\nGROUP BY title;"),
+            help_details("The “must be in GROUP BY” rule",
+              tagList("If you ", kbd("SELECT title, full_name, COUNT(*)"),
+                " but only ", kbd("GROUP BY title"), ", which ", kbd("full_name"),
+                " would the row show? It's ambiguous. Either group by it too or ",
+                "wrap it in an aggregate.")),
+            continue_button("group_continue2"),
+            id_prefix = "group-step"
+          )),
+
+          # ===== STEP 3 =====
+          conditionalPanel("output.group_step >= 3",
+          step_container(3, "COUNT(*) vs COUNT(column)",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                tags$code("COUNT(*)"), " counts rows; ", tags$code("COUNT(col)"),
+                " counts rows where ", tags$code("col"), " is non-NULL. Likewise ",
+                tags$code("AVG"), "/", tags$code("SUM"),
+                " ignore NULLs in their argument."),
+              plain = tagList(tags$b("In human words. "),
+                kbd("COUNT(*)"), " is “how many rows.” ", kbd("COUNT(salary)"),
+                " is “how many rows have a salary on file” — NULLs don't count."),
+              lab = tagList(tags$b("Lab database. "),
+                "12 researchers, but ", kbd("COUNT(salary)"), " is 10 because two ",
+                "salaries are NULL. ", kbd("AVG(salary)"),
+                " averages only those ten.")
+            ),
+            sql_code("SELECT COUNT(*) AS rows_total,\n       COUNT(salary) AS with_salary\nFROM researchers;"),
+            sql_editor("gsed3", starter = "SELECT COUNT(*) AS rows_total,\n       COUNT(salary) AS with_salary\nFROM researchers;"),
+            callout_warm(tags$b("A subtle averaging trap. "),
+              kbd("AVG(salary)"), " divides by the 10 disclosed salaries, not 12. ",
+              "If you wanted to treat undisclosed as zero, you'd handle the NULLs ",
+              "first — averages silently skip them."),
+            continue_button("group_continue3"),
+            id_prefix = "group-step"
+          )),
+
+          # ===== STEP 4 =====
+          conditionalPanel("output.group_step >= 4",
+          step_container(4, "Filter groups with HAVING",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                tags$code("WHERE"), " filters rows before grouping; ", tags$code("HAVING"),
+                " filters groups after aggregation. Conditions on an aggregate ",
+                "(", tags$code("COUNT(*) > 1"), ") must live in ", tags$code("HAVING"),
+                ", since the count doesn't exist until the group is formed."),
+              plain = tagList(tags$b("In human words. "),
+                kbd("WHERE"), " decides which rows go into the piles; ", kbd("HAVING"),
+                " decides which piles survive. Use ", kbd("HAVING"),
+                " whenever the test is about a group total."),
+              lab = tagList(tags$b("Lab database. "),
+                kbd("GROUP BY title HAVING COUNT(*) > 1"),
+                " keeps only the job titles held by more than one researcher.")
+            ),
+            sql_code("SELECT title, COUNT(*) AS n\nFROM researchers\nGROUP BY title\nHAVING COUNT(*) > 1;"),
+            sql_editor("gsed4", starter = "SELECT title, COUNT(*) AS n\nFROM researchers\nGROUP BY title\nHAVING COUNT(*) > 1;"),
+            execution_order_ribbon(
+              active = c("WHERE", "GROUP BY", "HAVING"),
+              note = "The order explains the split: WHERE runs before GROUP BY (so it can't see counts), HAVING runs after (so it can)."),
+            continue_button("group_continue4"),
+            id_prefix = "group-step"
+          )),
+
+          # ===== STEP 5 =====
+          conditionalPanel("output.group_step >= 5",
+          step_container(5, "Group by several columns",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "Grouping by multiple columns forms one group per distinct ",
+                tags$em("combination"), " of those columns; the aggregates are ",
+                "computed within each combination."),
+              plain = tagList(tags$b("In human words. "),
+                "Split into piles by two things at once — e.g. status ", tags$em("and"),
+                " year — and summarize each pile."),
+              lab = tagList(tags$b("Lab database. "),
+                kbd("GROUP BY status, year"), " gives a count for each ",
+                "status-and-year combination that actually occurs.")
+            ),
+            sql_code("SELECT status, year, COUNT(*) AS n\nFROM studies\nGROUP BY status, year;"),
+            sql_editor("gsed5", starter = "SELECT status, year, COUNT(*) AS n\nFROM studies\nGROUP BY status, year;"),
+            continue_button("group_done", "I've got GROUP BY ↓"),
+            id_prefix = "group-step"
+          )),
+
+          # ===== QUEST =====
+          conditionalPanel("output.group_step >= 5",
+          quest_section(
+            "Ten queries to make summarizing automatic",
+            intro = p(style = "line-height:1.6; margin-bottom:0;",
+              "These use ", kbd("COUNT"), ", ", kbd("AVG"), ", ", kbd("MIN"), "/",
+              kbd("MAX"), ", ", kbd("GROUP BY"), ", and ", kbd("HAVING"), ". ",
+              "Use the exact output column names each prompt asks for. Tables: ",
+              kbd("researchers"), ", ", kbd("studies"), ", ", kbd("participants"), "."),
+            quest_editors_ui(GROUP_QUEST, "grpq")
+          ))
+        )
+      )
+    )
+  })
+}
