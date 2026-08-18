@@ -54,13 +54,14 @@ sql_is_mutating <- function(sql) {
 run_query <- function(con, sql, allow_mutation = FALSE) {
   sql <- trimws(sql)
   if (!nzchar(sql)) {
-    return(list(ok = FALSE, error = "Type a query, then press Run."))
+    return(list(ok = FALSE, error = "The editor is empty. Type a query, then press Run."))
   }
   if (!allow_mutation && sql_is_mutating(sql)) {
     return(list(ok = FALSE,
-      error = paste0("This editor is read-only, so it only runs SELECT ",
-                     "queries. (Changing data comes later, on the ",
-                     tags_b("Changing data"), " tab.)")))
+      error = paste0("This editor is read-only, so it runs SELECT queries and ",
+                     "politely declines everything else. Statements that change ",
+                     "data get their own tab (", tags_b("Changing data"),
+                     "), with a private copy you are allowed to break.")))
   }
   out <- tryCatch(
     {
@@ -82,13 +83,13 @@ tags_b <- function(x) as.character(shiny::tags$b(x))
 friendly_sql_error <- function(msg) {
   m <- tolower(msg)
   hint <- if (grepl("no such column", m)) {
-    "There's a column name SQLite doesn't recognize. Check spelling and that the column lives in a table you've named in FROM."
+    "SQLite does not recognize one of your column names. Check the spelling, and check that the column lives in a table you actually named in FROM; the second is the more common mistake."
   } else if (grepl("no such table", m)) {
-    "There's a table name SQLite doesn't recognize. The tables are labs, researchers, studies, participants, enrollments, measurements."
+    "SQLite does not recognize one of your table names. The six tables are labs, researchers, studies, participants, enrollments, and measurements, all lower-case and all plural."
   } else if (grepl("syntax error", m)) {
-    "SQLite hit a syntax error. A missing comma, an unclosed quote, or a keyword out of order is the usual cause."
+    "SQLite hit a syntax error. The likeliest causes, in order: a missing comma between columns, an unclosed quote, or a clause out of order (FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT)."
   } else if (grepl("ambiguous column name", m)) {
-    "Two joined tables share that column name, so you need to qualify it, e.g. studies.lab_id rather than lab_id."
+    "Two of the joined tables share that column name, so SQLite cannot tell which one you mean. Qualify it: studies.lab_id rather than lab_id."
   } else {
     NULL
   }
@@ -113,13 +114,13 @@ normalize_df <- function(df, ordered = FALSE) {
 check_answer <- function(user_df, expected_df, ordered = FALSE,
                          check_names = TRUE) {
   if (is.null(user_df)) {
-    return(list(pass = FALSE, msg = "That query didn't return a table to check."))
+    return(list(pass = FALSE, msg = "That query did not return a table, so there is nothing to check yet."))
   }
   u <- normalize_df(user_df, ordered)
   e <- normalize_df(expected_df, ordered)
   if (check_names && !setequal(tolower(names(u)), tolower(names(e)))) {
     return(list(pass = FALSE,
-      msg = sprintf("The columns don't match yet. Expected: %s.",
+      msg = sprintf("Right idea, wrong column names. The target has: %s.",
                     paste(names(e), collapse = ", "))))
   }
   # Align column order to expected for comparison
@@ -128,10 +129,10 @@ check_answer <- function(user_df, expected_df, ordered = FALSE,
           isTRUE(all.equal(as.data.frame(u), as.data.frame(e),
                            check.attributes = FALSE)) == TRUE
   if (identical(same, TRUE)) {
-    list(pass = TRUE, msg = "Correct \u2014 the result set matches.")
+    list(pass = TRUE, msg = "Correct. The result set matches the target.")
   } else {
     list(pass = FALSE, msg = sprintf(
-      "Not quite. Your query returned %d row%s; the target has %d. Compare the two tables below.",
+      "Not yet. Your query returned %d row%s; the target has %d. Compare the two tables below and look for who is missing or who snuck in.",
       nrow(u), if (nrow(u) == 1) "" else "s", nrow(e)))
   }
 }
@@ -225,7 +226,7 @@ sql_editor_server <- function(id, input, output, session, con_fun,
     store$last <- res
     output[[ns_id("result")]] <- renderUI(render_table(res))
     if (!res$ok) {
-      store$verdict <- list(pass = FALSE, msg = "Fix the error above, then check again.")
+      store$verdict <- list(pass = FALSE, msg = "There is an error above to fix first; then check again.")
     } else {
       store$verdict <- check_answer(res$data, expected, ordered = ordered)
     }
@@ -257,7 +258,7 @@ sql_editor_server <- function(id, input, output, session, con_fun,
 render_html_table <- function(df) {
   if (nrow(df) == 0) {
     return(div(style = "padding:14px; color:#6b7c85; font-style:italic;",
-               "No rows."))
+               "No rows. The query ran; nothing matched."))
   }
   fmt <- function(x) {
     if (is.numeric(x)) x <- formatC(x, format = "g", digits = 6)
@@ -324,30 +325,30 @@ execution_order_ribbon <- function(active = NULL, note = NULL) {
 # on Tab 1 and embeddable in the Tab 10 sandbox sidebar.
 SCHEMA <- list(
   labs = list(
-    blurb = "The research labs in the institute.",
+    blurb = "The institute's six labs, each a monument to a question nobody asked.",
     cols = c("lab_id (PK)", "lab_name", "building", "founded_year"),
     rel  = "One lab has many researchers and many studies."),
   researchers = list(
-    blurb = "Who works here. lab_id and salary can be NULL.",
+    blurb = "Who works here. lab_id and salary can be NULL (one visiting fellow, two undisclosed salaries).",
     cols = c("researcher_id (PK)", "full_name", "lab_id (FK\u2192labs)",
              "title", "salary", "start_year"),
     rel  = "Each researcher belongs to at most one lab; may lead studies."),
   studies = list(
-    blurb = "The (mostly absurd) studies.",
+    blurb = "The studies, ten so far, one abandoned.",
     cols = c("study_id (PK)", "title", "lab_id (FK\u2192labs)",
              "lead_researcher_id (FK\u2192researchers)", "year", "status", "sample_size"),
     rel  = "Belongs to one lab; led by one researcher; enrolls many participants."),
   participants = list(
-    blurb = "Humans (many named Dave), seagulls, and crickets. age can be NULL.",
+    blurb = "Humans (eight named Dave), three seagulls, three crickets. age can be NULL, and is, for every seagull.",
     cols = c("participant_id (PK)", "nickname", "species", "age"),
     rel  = "Enrolls in many studies via enrollments."),
   enrollments = list(
-    blurb = "Bridge table: which participant is in which study.",
+    blurb = "Bridge table: which participant is in which study, and whether they stuck it out.",
     cols = c("enrollment_id (PK)", "study_id (FK\u2192studies)",
              "participant_id (FK\u2192participants)", "dropped_out"),
     rel  = "Connects studies and participants; has many measurements."),
   measurements = list(
-    blurb = "Repeated trials (1..k) per enrollment.",
+    blurb = "Repeated trials (up to five) per enrollment. Built for the Windows tab.",
     cols = c("measurement_id (PK)", "enrollment_id (FK\u2192enrollments)",
              "trial", "value"),
     rel  = "Each row is one trial of one enrollment.")

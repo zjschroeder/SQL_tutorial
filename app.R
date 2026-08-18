@@ -129,7 +129,8 @@ quest_section <- function(title, intro, ...) {
       p(style = "color:#7A4F00; font-size:13px; font-style:italic; margin-top:8px;",
         "Write each query, press ", tags$b("Run"), " to see your result, then ",
         tags$b("Check my answer"), " to grade it against the target. Stuck? ",
-        tags$b("Show a solution"), " reveals one correct query."),
+        tags$b("Show a solution"), " reveals one correct query; there are usually ",
+        "several, and yours may be one of them even if it looks different."),
       ...
   )
 }
