@@ -4,7 +4,9 @@
 # Orients an R user who knows data frames but not databases: what a relational
 # database is, the anatomy (tables/rows/columns/keys), what SQL is (declarative,
 # which seeds order-of-execution later), the clickable schema of the running
-# database, a preview of the execution-order ribbon, and a routing grid.
+# database, the written-order and execution-order ribbons, a vocabulary table
+# (statement / clause / predicate ...; DQL / DML / DDL / TCL / DCL), and a
+# routing grid.
 # =============================================================================
 
 source_start_server <- function(input, output, session) {
@@ -112,9 +114,63 @@ source_start_server <- function(input, output, session) {
         "doesn't this work?” moments in SQL trace back to this sequence, so ",
         "the ribbon reappears on later tabs to light up whichever clause you are ",
         "learning at the time."),
+      written_order_ribbon(
+        note = "This order is fixed by the grammar. Put WHERE after GROUP BY and the reward is a syntax error."),
       execution_order_ribbon(
         active = NULL,
-        note = "No need to memorize it yet. Notice only that SELECT, the thing you write first, happens second to last."),
+        note = "No need to memorize it yet. Notice only that SELECT, the clause you write first, runs sixth of ten, after the rows have been found, filtered, and grouped."),
+      help_details("How literally should I take “runs in this order”?",
+        tagList("This is the ", tags$em("logical"), " order: the order that explains ",
+          "which clause can see what. The database's query planner is free to do the ",
+          "physical work in any sequence that produces the same answer (it will often ",
+          "apply a ", kbd("WHERE"), " filter while it is still reading the table, for ",
+          "instance), and it does. One wrinkle is specific to SQLite and comes up on the ",
+          "SELECT and WHERE tabs: SQLite lets ", kbd("WHERE"), " use a column alias ",
+          "from ", kbd("SELECT"), ", which the logical order says should be impossible. ",
+          "It manages this by quietly substituting the expression the alias stands for. ",
+          "PostgreSQL, SQL Server, and Oracle refuse.")),
+
+      # ---- Vocabulary ----
+      h3("A few words you will keep meeting", style = "margin:22px 0 6px 0;"),
+      p(style = "line-height:1.6; max-width:820px; margin-bottom:4px;",
+        "Documentation and error messages use these terms without defining them, so ",
+        "here they are once."),
+      term_table(head = c("Term", "Meaning"), rows = list(
+        c("statement", "One complete instruction, ending in a semicolon. “Query” usually means a statement that only reads, i.e., a SELECT."),
+        c("clause", "A named part of a statement, introduced by a keyword: the FROM clause, the WHERE clause."),
+        c("keyword", "A word SQL reserves for itself: SELECT, FROM, NULL. Keywords are not case-sensitive; they are written in capitals by convention, so they stand apart from the names."),
+        c("identifier", "A name somebody chose: a table, a column, an alias. In SQLite these are not case-sensitive either."),
+        c("literal", "A value typed out in the query: 'PI', 2019, NULL. Text literals are case-sensitive, so 'pi' is not 'PI'."),
+        c("expression", "Anything that computes a value: salary * 1.03, UPPER(nickname), a literal on its own."),
+        c("predicate", "An expression whose answer is true, false, or unknown: age >= 30. WHERE, HAVING, and ON each take one."),
+        c("schema", "The design of the database: which tables exist, their columns, types, and keys. The six cards below are this database's schema."))),
+      p(style = "line-height:1.6; max-width:820px;",
+        "SQL's statements are conventionally sorted into families, and job postings use ",
+        "the acronyms, so they are worth recognizing: ", tags$b("DQL"), " (querying: ",
+        kbd("SELECT"), "), ", tags$b("DML"), " (changing rows: ", kbd("INSERT"), ", ",
+        kbd("UPDATE"), ", ", kbd("DELETE"), "), ", tags$b("DDL"), " (defining tables: ",
+        kbd("CREATE"), ", ", kbd("ALTER"), ", ", kbd("DROP"), "), ", tags$b("TCL"),
+        " (transactions: ", kbd("BEGIN"), ", ", kbd("COMMIT"), ", ", kbd("ROLLBACK"),
+        "), and ", tags$b("DCL"), " (permissions: ", kbd("GRANT"), ", ", kbd("REVOKE"),
+        "). This tutorial covers the first four. SQLite has no DCL at all: the database ",
+        "is a file, and whoever can open the file can do anything to it."),
+      help_details("House rules of the grammar",
+        tagList(
+          p(style = "margin-bottom:6px;", "A statement ends with a semicolon. With a single statement in the ",
+            "editor SQLite forgives its absence; write it anyway, since most other tools do not."),
+          p(style = "margin-bottom:6px;", "Spaces and line breaks mean nothing to the database. Put each clause ",
+            "on its own line for the benefit of whoever reads the query next, who is usually you."),
+          p(style = "margin-bottom:6px;", "Comments come in two kinds: ", kbd("-- like this"),
+            " (to the end of the line) and ", kbd("/* like this */"), " (between the marks, across lines if need be)."),
+          p(style = "margin-bottom:0;", "Single quotes are for text values (", kbd("'PI'"),
+            "); double quotes are for identifiers that need protecting, such as a column name with a space in it (",
+            kbd("\"lab name\""), "). The WHERE tab has more to say about what happens when you mix them up."))),
+      help_details("Which SQL is this?",
+        tagList("SQL is a standard with dialects. PostgreSQL, MySQL, SQL Server, Oracle, ",
+          "and SQLite each implement most of the standard and then add or omit things. ",
+          "This tutorial runs SQLite, because SQLite runs in a browser. Nearly everything ",
+          "here is portable; where SQLite does something the others don't (or the ",
+          "reverse), the text says so, and the last tab collects the differences in one place.")),
 
       # ---- Schema explorer ----
       h3("The institute's database", style = "margin:18px 0 4px 0;"),
@@ -142,11 +198,14 @@ source_start_server <- function(input, output, session) {
         start_route("WHERE",         "Keep only the rows you want, and meet NULL, the idea that trips up everyone at least once."),
         start_route("ORDER BY",      "Sort, and take the top N."),
         start_route("GROUP BY",      "Summarize: counts, averages, one row per group."),
+        start_route("Functions",     "Text, numbers, and dates; CASE for if-then logic; COALESCE for the NULLs."),
         start_route("JOINs",         "Combine tables by their keys. The reason a database is not a pile of spreadsheets."),
+        start_route("UNION",         "Stack one query's rows on another's, or take the overlap, or the difference."),
         start_route("Subqueries",    "Queries inside queries, and CTEs so they stay readable."),
-        start_route("Windows",       "Per-row calculations across a group: ranks, running totals."),
-        start_route("Changing data", "INSERT, UPDATE, DELETE, on your own disposable copy."),
-        start_route("Put it together","20 mixed challenges, a free sandbox, and a short note on speed.")
+        start_route("Windows",       "Per-row calculations across a group: ranks, running totals, moving averages."),
+        start_route("Changing data", "INSERT, UPDATE, DELETE, and transactions, on your own disposable copy."),
+        start_route("Tables",        "CREATE TABLE, types, constraints, keys, ALTER, DROP, and views."),
+        start_route("Put it together","20 mixed challenges, a free sandbox, a keyword index, and a short note on speed.")
       ),
 
       div(style = "text-align:center; color:#6b7c85; font-size:13px; padding:8px 0 24px 0;",

@@ -34,20 +34,42 @@ CSVs for the random tables, so the build is reproducible).
 
 | Tab | Teaches |
 |------------------------------------|------------------------------------|
-| Start here | what a relational DB is; the schema; the execution-order idea |
+| Start here | what a relational DB is; vocabulary (statement, clause, predicate; DQL/DML/DDL/TCL/DCL); the schema; written order vs execution order |
 | SELECT | projecting columns, `SELECT *`, `AS`, `DISTINCT`, computed columns |
-| WHERE | filtering, `AND/OR/NOT`, `BETWEEN`, `IN`, `LIKE`, **`NULL` and three-valued logic** |
-| ORDER BY | sorting, `LIMIT`/`OFFSET`, top-N |
-| GROUP BY | aggregation, `HAVING` vs `WHERE` |
-| JOINs | `INNER`/`LEFT`/self/multi-table, **row multiplication**, the LEFT-to-INNER filter trap |
-| Subqueries | scalar/`IN`/`EXISTS`/correlated subqueries, CTEs (`WITH`) |
-| Windows | `OVER`, `PARTITION BY`, ranking, running totals, `LAG`/`LEAD` |
-| Changing data | `INSERT`/`UPDATE`/`DELETE` on a private disposable copy |
-| Put it together | 20 mixed challenges, a free sandbox, a note on indexing and speed |
+| WHERE | comparisons, `AND/OR/NOT`, `BETWEEN`, `IN`, `LIKE` (`ESCAPE`, `GLOB`), **`NULL` and three-valued logic** |
+| ORDER BY | sorting, tiebreakers, `NULLS FIRST/LAST`, `LIMIT`/`OFFSET`, top-N |
+| GROUP BY | `COUNT`/`SUM`/`AVG`/`MIN`/`MAX`, `COUNT(DISTINCT)`, `GROUP_CONCAT`, `HAVING` vs `WHERE` |
+| Functions | `\|\|` and text functions, `ROUND`, integer division, `CAST`, **`CASE`**, `COALESCE`/`NULLIF`, conditional aggregation and `FILTER`, dates |
+| JOINs | `INNER`/`LEFT`/`RIGHT`/`FULL OUTER`/`CROSS`, `USING`, self-joins, **row multiplication**, the LEFT-to-INNER filter trap |
+| UNION | `UNION ALL`, `UNION`, `INTERSECT`, `EXCEPT`, and the rules for combining results |
+| Subqueries | scalar/`IN`/`EXISTS`/correlated subqueries, the `NOT IN` + NULL trap, CTEs (`WITH`), derived tables, `WITH RECURSIVE` |
+| Windows | `OVER`, `PARTITION BY`, ranking, running totals, `LAG`/`LEAD`, frames (`ROWS BETWEEN`), top-N per group, `NTILE`, `FIRST_VALUE` |
+| Changing data | `INSERT`/`UPDATE`/`DELETE`, upsert (`ON CONFLICT`), `RETURNING`, transactions (`BEGIN`/`COMMIT`/`ROLLBACK`), on a private disposable copy |
+| Tables | `CREATE TABLE`, types and affinity, constraints (`PRIMARY KEY`, `NOT NULL`, `UNIQUE`, `CHECK`, `DEFAULT`), foreign keys, `ALTER`/`DROP TABLE`, views, `CREATE TABLE AS` |
+| Put it together | 20 mixed challenges, a free sandbox, a keyword index, what other dialects add, running SQL from R, a note on indexing and speed |
 
-Each query tab is a short sequence of concept steps that ends with a
+Each walkthrough tab is a short sequence of concept steps that ends with a
 **10-question live-editor "quest"**. Ten is not a magic number; it is
 roughly how many it takes before a clause stops feeling foreign.
+
+The execution-order ribbon (FROM / JOIN, WHERE, GROUP BY, HAVING, window
+functions, SELECT, DISTINCT, UNION / INTERSECT / EXCEPT, ORDER BY,
+LIMIT / OFFSET) recurs through the tabs. Every chip on it is taught, and
+lit, on some tab; `R/sql_helpers.R` lists where.
+
+## Accuracy notes
+
+The app runs SQLite, and says so where SQLite departs from the standard
+or from the other major databases. The departures that matter to a
+learner, all covered in the text: SQLite lets `WHERE` and `HAVING` use a
+`SELECT` alias; it accepts a double-quoted string where an identifier
+was expected; its column types are advisory unless the table is
+`STRICT`; foreign keys are enforced only after `PRAGMA foreign_keys = ON`;
+it permits bare columns in an aggregate query; and it evaluates chained
+set operators strictly left to right. `RIGHT` and `FULL OUTER JOIN` need
+SQLite 3.39+, `RETURNING` and `DROP COLUMN` 3.35+; these appear only in
+ungraded demos or on the writing tabs, never in a read-only quest's
+reference query.
 
 ## How the live editor works
 
@@ -55,11 +77,17 @@ roughly how many it takes before a clause stops feeling foreign.
   so a stray `DROP` or `DELETE` cannot harm the data. The editor
   politely declines data-modifying statements until the Changing-data
   tab.
-- That tab gives each session a **private in-memory copy** to modify
-  freely, with a Reset button.
+- The Changing-data and Tables tabs share a **private in-memory copy**
+  per session, with a Reset button. The copy is rebuilt from the
+  `CREATE` statements in `sqlite_master`, so it keeps the primary keys,
+  `NOT NULL`s, defaults, foreign keys, and indexes of the real thing
+  (`dbWriteTable()` would drop them all). Tasks there are graded by
+  inspecting the copy's state after your statement has run.
 - Grading runs a reference query against the same database and compares
   result sets (order-insensitive unless the question is about ordering),
-  so the answer key cannot drift from the data.
+  so the answer key cannot drift from the data. Every order-sensitive
+  question names a tiebreaker, because SQL leaves the order of tied rows
+  undefined.
 
 ## Running locally
 

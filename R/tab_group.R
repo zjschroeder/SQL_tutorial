@@ -1,8 +1,11 @@
 # =============================================================================
 # tab_group.R — "GROUP BY" aggregation walkthrough (Tab 5)
 #
-# Five gated steps (whole-table aggregates; GROUP BY; COUNT(*) vs COUNT(col) and
-# NULLs; HAVING vs WHERE; multi-column grouping) then a 10-question quest.
+# Six gated steps (whole-table aggregates; GROUP BY; COUNT(*) vs COUNT(col) and
+# NULLs; HAVING vs WHERE; multi-column grouping; SUM / COUNT(DISTINCT) /
+# GROUP_CONCAT) then a 10-question quest. No graded item uses GROUP_CONCAT: the
+# order it concatenates in is arbitrary, so its output cannot be graded by
+# result-set comparison.
 # Prompts name the required output column (e.g. "as n") so the result-set
 # grader's column-name check is unambiguous.
 # =============================================================================
@@ -17,15 +20,17 @@ GROUP_QUEST <- list(
   list(prompt = "For each title, return the title and the number of researchers holding it as n.",
        ref = "SELECT title, COUNT(*) AS n FROM researchers GROUP BY title;", ordered = FALSE,
        solution = "SELECT title, COUNT(*) AS n FROM researchers GROUP BY title;"),
-  list(prompt = "For each study status, return the status and the number of studies as n.",
-       ref = "SELECT status, COUNT(*) AS n FROM studies GROUP BY status;", ordered = FALSE,
-       solution = "SELECT status, COUNT(*) AS n FROM studies GROUP BY status;"),
+  list(prompt = paste0("For each lab_id in the studies table, return the lab_id and the total ",
+                       "sample_size across its studies as total_n."),
+       ref = "SELECT lab_id, SUM(sample_size) AS total_n FROM studies GROUP BY lab_id;", ordered = FALSE,
+       solution = "SELECT lab_id, SUM(sample_size) AS total_n FROM studies GROUP BY lab_id;"),
   list(prompt = "For each status, return the status and the average sample_size as avg_n.",
        ref = "SELECT status, AVG(sample_size) AS avg_n FROM studies GROUP BY status;", ordered = FALSE,
        solution = "SELECT status, AVG(sample_size) AS avg_n FROM studies GROUP BY status;"),
-  list(prompt = "For each participant species, return the species and the number of participants as n.",
-       ref = "SELECT species, COUNT(*) AS n FROM participants GROUP BY species;", ordered = FALSE,
-       solution = "SELECT species, COUNT(*) AS n FROM participants GROUP BY species;"),
+  list(prompt = paste0("For each participant species, return the species, the number of participants ",
+                       "as n, and the number of different nicknames among them as n_names."),
+       ref = "SELECT species, COUNT(*) AS n, COUNT(DISTINCT nickname) AS n_names FROM participants GROUP BY species;", ordered = FALSE,
+       solution = "SELECT species, COUNT(*) AS n, COUNT(DISTINCT nickname) AS n_names\nFROM participants\nGROUP BY species;"),
   list(prompt = paste0("Return the youngest and oldest known participant age, as columns ",
                        "youngest and oldest."),
        ref = "SELECT MIN(age) AS youngest, MAX(age) AS oldest FROM participants;", ordered = FALSE,
@@ -52,7 +57,8 @@ GROUP_STEP_TITLES <- c(
   "One row per group with GROUP BY",
   "COUNT(*) vs COUNT(column)",
   "Filter groups with HAVING",
-  "Group by several columns"
+  "Group by several columns",
+  "SUM, COUNT(DISTINCT), GROUP_CONCAT"
 )
 
 source_group_server <- function(input, output, session) {
@@ -65,11 +71,12 @@ source_group_server <- function(input, output, session) {
   observeEvent(input$group_continue2, walk$step <- max(walk$step, 3))
   observeEvent(input$group_continue3, walk$step <- max(walk$step, 4))
   observeEvent(input$group_continue4, walk$step <- max(walk$step, 5))
+  observeEvent(input$group_continue5, walk$step <- max(walk$step, 6))
 
   output$group_toc <- renderUI(
     walkthrough_toc(walk$step, GROUP_STEP_TITLES, "group-step"))
 
-  wire_demo_editors("gsed", 5, input, output, session)
+  wire_demo_editors("gsed", 6, input, output, session)
   wire_quest_editors(GROUP_QUEST, "grpq", input, output, session)
 
   output$group_tab_ui <- renderUI({
@@ -111,12 +118,13 @@ source_group_server <- function(input, output, session) {
                 "table, a very short one."),
               lab = tagList(tags$b("Lab database. "),
                 kbd("SELECT COUNT(*) FROM researchers"), " returns 12; ",
+                kbd("SELECT SUM(salary) FROM researchers"), " returns the payroll, 897000; ",
                 kbd("SELECT AVG(salary) FROM researchers"),
                 " returns the mean salary of the ten who disclosed one, a distinction ",
                 "step 3 makes precise.")
             ),
-            sql_code("SELECT COUNT(*) AS n,\n       AVG(salary) AS avg_salary,\n       MAX(salary) AS top_salary\nFROM researchers;"),
-            sql_editor("gsed1", starter = "SELECT COUNT(*) AS n,\n       AVG(salary) AS avg_salary,\n       MAX(salary) AS top_salary\nFROM researchers;"),
+            sql_code("SELECT COUNT(*) AS n,\n       SUM(salary) AS payroll,\n       AVG(salary) AS avg_salary,\n       MAX(salary) AS top_salary\nFROM researchers;"),
+            sql_editor("gsed1", starter = "SELECT COUNT(*) AS n,\n       SUM(salary) AS payroll,\n       AVG(salary) AS avg_salary,\n       MAX(salary) AS top_salary\nFROM researchers;"),
             callout_warm(tags$b("Name your summaries. "),
               "An aggregate's default column name is the expression itself (",
               kbd("COUNT(*)"), "), which is legal and unlovely. Give it an alias with ",
@@ -134,7 +142,8 @@ source_group_server <- function(input, output, session) {
                 tags$code("GROUP BY"), " partitions rows into groups sharing the ",
                 "grouping key; each aggregate is then computed per group, yielding ",
                 "one output row per group. Non-aggregated columns in ",
-                tags$code("SELECT"), " must appear in ", tags$code("GROUP BY"), "."),
+                tags$code("SELECT"), " must appear in ", tags$code("GROUP BY"),
+                ". Rows whose key is ", tags$code("NULL"), " are grouped together."),
               plain = tagList(tags$b("In human words. "),
                 "Sort the rows into piles by some column, then summarize each ",
                 "pile. “How many researchers ", tags$em("per title"), "?” is one ",
@@ -211,6 +220,20 @@ source_group_server <- function(input, output, session) {
             ),
             sql_code("SELECT title, COUNT(*) AS n\nFROM researchers\nGROUP BY title\nHAVING COUNT(*) > 1;"),
             sql_editor("gsed4", starter = "SELECT title, COUNT(*) AS n\nFROM researchers\nGROUP BY title\nHAVING COUNT(*) > 1;"),
+            help_details("WHERE and HAVING in the same query",
+              tagList("They are not alternatives, and a query often wants both. ",
+                kbd("SELECT status, COUNT(*) AS n FROM studies WHERE year >= 2018 GROUP BY status HAVING COUNT(*) >= 2"),
+                " first discards the studies from before 2018, then counts what is left ",
+                "per status, then keeps the statuses with at least two. (Completed has ",
+                "four and ongoing three; the abandoned cricket study, from 2014, never ",
+                "made it past the ", kbd("WHERE"), ".)")),
+            help_details("HAVING n > 1?",
+              tagList("SQLite and MySQL let ", kbd("HAVING"), " refer to the ",
+                kbd("SELECT"), " alias, so ", kbd("HAVING n > 1"), " runs here. ",
+                "PostgreSQL and SQL Server do not, for the reason the ribbon gives: ",
+                kbd("HAVING"), " runs before ", kbd("SELECT"), " names anything. ",
+                "Writing the aggregate out again, ", kbd("HAVING COUNT(*) > 1"),
+                ", works everywhere, and it is what this tutorial's solutions do.")),
             execution_order_ribbon(
               active = c("WHERE", "GROUP BY", "HAVING"),
               note = "The order explains the split: WHERE runs before GROUP BY (so it cannot see counts), HAVING runs after (so it can). If you ever forget which is which, come back to this ribbon rather than guessing."),
@@ -237,17 +260,57 @@ source_group_server <- function(input, output, session) {
             ),
             sql_code("SELECT status, year, COUNT(*) AS n\nFROM studies\nGROUP BY status, year;"),
             sql_editor("gsed5", starter = "SELECT status, year, COUNT(*) AS n\nFROM studies\nGROUP BY status, year;"),
-            continue_button("group_done", "I've got GROUP BY ↓"),
+            continue_button("group_continue5"),
+            id_prefix = "group-step"
+          )),
+
+          # ===== STEP 6 =====
+          conditionalPanel("output.group_step >= 6",
+          step_container(6, "SUM, COUNT(DISTINCT), GROUP_CONCAT",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                tags$code("SUM(x)"), " totals the non-NULL values of ", tags$code("x"),
+                ". Placing ", tags$code("DISTINCT"), " inside an aggregate, as in ",
+                tags$code("COUNT(DISTINCT x)"), ", removes duplicate values before ",
+                "aggregating. ", tags$code("GROUP_CONCAT(x, sep)"),
+                " concatenates the group's non-NULL values into one string."),
+              plain = tagList(tags$b("In human words. "),
+                kbd("COUNT(*)"), " says how many rows are in the pile; ",
+                kbd("COUNT(DISTINCT nickname)"), " says how many ", tags$em("different"),
+                " nicknames are in it. ", kbd("GROUP_CONCAT"), " is for when you want ",
+                "to see the pile's contents and not only its size: it writes the values ",
+                "out in one cell, separated by commas."),
+              lab = tagList(tags$b("Lab database. "),
+                "The institute has 18 human participants sharing 11 nicknames, which is ",
+                "what eight Daves will do to a sample. The three seagulls and three ",
+                "crickets, to their credit, have three names apiece.")
+            ),
+            sql_code("SELECT species,\n       COUNT(*)                 AS n,\n       COUNT(DISTINCT nickname) AS n_names,\n       GROUP_CONCAT(DISTINCT nickname) AS who\nFROM participants\nGROUP BY species;"),
+            sql_editor("gsed6", starter = "SELECT species,\n       COUNT(*)                 AS n,\n       COUNT(DISTINCT nickname) AS n_names,\n       GROUP_CONCAT(DISTINCT nickname) AS who\nFROM participants\nGROUP BY species;", height = "150px"),
+            callout_warm(tags$b("SUM of nothing is NULL, not zero. "),
+              "If a group has no non-NULL values to add up, ", kbd("SUM"),
+              " returns ", kbd("NULL"), ". (", kbd("COUNT"), " of nothing, by contrast, ",
+              "is 0.) This matters the first time you subtract one total from another ",
+              "and the answer comes back blank. The Functions tab has the usual fix, ",
+              kbd("COALESCE(SUM(x), 0)"), "."),
+            help_details("GROUP_CONCAT elsewhere, and its ordering",
+              tagList("The name is SQLite's and MySQL's. PostgreSQL and SQL Server call it ",
+                kbd("STRING_AGG(x, ', ')"), " (recent SQLite accepts that spelling too), ",
+                "and Oracle calls it ", kbd("LISTAGG"), ". In all of them the order of the ",
+                "values inside the string is not promised unless you ask for one, so the ",
+                "output is for reading; don't build a comparison on it.")),
+            continue_button("group_done", "I've got GROUP BY \u2193"),
             id_prefix = "group-step"
           )),
 
           # ===== QUEST =====
-          conditionalPanel("output.group_step >= 5",
+          conditionalPanel("output.group_step >= 6",
           quest_section(
             "Ten queries to make summarizing automatic",
             intro = p(style = "line-height:1.6; margin-bottom:0;",
-              "These use ", kbd("COUNT"), ", ", kbd("AVG"), ", ", kbd("MIN"), "/",
-              kbd("MAX"), ", ", kbd("GROUP BY"), ", and ", kbd("HAVING"), ". ",
+              "These use ", kbd("COUNT"), ", ", kbd("SUM"), ", ", kbd("AVG"), ", ",
+              kbd("MIN"), "/", kbd("MAX"), ", ", kbd("COUNT(DISTINCT …)"), ", ",
+              kbd("GROUP BY"), ", and ", kbd("HAVING"), ". ",
               "Use the exact output column names each prompt asks for; the grader ",
               "reads the header. Tables: ",
               kbd("researchers"), ", ", kbd("studies"), ", ", kbd("participants"), "."),

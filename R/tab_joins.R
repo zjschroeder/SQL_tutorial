@@ -4,7 +4,13 @@
 # The big-hurdle tab, given extra scaffolding per the research: a row-by-row
 # trace (Venn diagrams hide row multiplication), the LEFT-JOIN anti-join
 # pattern, the LEFT->INNER filter trap, and one-to-many row multiplication.
-# Five gated steps then a 10-question quest.
+# Seven gated steps then a 10-question quest. Steps 6 (RIGHT / FULL OUTER /
+# CROSS) and 7 (self-joins) complete the set of join types; the self-join is
+# tested in the quest, so it needs a step of its own.
+#
+# RIGHT and FULL OUTER JOIN need SQLite 3.39 (2022) or later. They appear only
+# in ungraded demo editors, never in a quest reference, so an older build
+# degrades to a friendly error in one editor and nothing else.
 # =============================================================================
 
 JOINS_QUEST <- list(
@@ -61,7 +67,9 @@ JOINS_STEP_TITLES <- c(
   "Qualify columns; table aliases",
   "LEFT JOIN and finding what's missing",
   "The LEFT-to-INNER filter trap",
-  "Row multiplication; many tables"
+  "Row multiplication; many tables",
+  "RIGHT, FULL OUTER, and CROSS JOIN",
+  "Self-joins: a table meets itself"
 )
 
 source_joins_server <- function(input, output, session) {
@@ -74,11 +82,13 @@ source_joins_server <- function(input, output, session) {
   observeEvent(input$joins_continue2, walk$step <- max(walk$step, 3))
   observeEvent(input$joins_continue3, walk$step <- max(walk$step, 4))
   observeEvent(input$joins_continue4, walk$step <- max(walk$step, 5))
+  observeEvent(input$joins_continue5, walk$step <- max(walk$step, 6))
+  observeEvent(input$joins_continue6, walk$step <- max(walk$step, 7))
 
   output$joins_toc <- renderUI(
     walkthrough_toc(walk$step, JOINS_STEP_TITLES, "joins-step"))
 
-  wire_demo_editors("jsed", 5, input, output, session)
+  wire_demo_editors("jsed", 8, input, output, session)
   wire_quest_editors(JOINS_QUEST, "joiq", input, output, session)
 
   output$joins_tab_ui <- renderUI({
@@ -134,6 +144,15 @@ source_joins_server <- function(input, output, session) {
               ": only matched rows. The word INNER is optional, and most people ",
               "leave it off, which is fine as long as you remember that “join” ",
               "without qualification means “drop the unmatched.”"),
+            help_details("The older spelling: FROM studies, labs WHERE …",
+              tagList("Before ", kbd("JOIN … ON"), " existed, people listed the tables ",
+                "with a comma and put the matching rule in ", kbd("WHERE"), ": ",
+                kbd("FROM studies, labs WHERE studies.lab_id = labs.lab_id"),
+                ". It still runs and you will meet it in old code. Its weakness is that ",
+                "nothing forces you to write the ", kbd("WHERE"), ". Leave it off and ",
+                "every study is paired with every lab, 60 rows where you wanted 10, and ",
+                "no error. ", kbd("JOIN … ON"), " keeps the rule next to the join it ",
+                "belongs to, which is the whole argument for it.")),
             continue_button("joins_continue1"),
             id_prefix = "joins-step"
           ),
@@ -164,6 +183,19 @@ source_joins_server <- function(input, output, session) {
                 tags$em("ambiguous column name"), ". Of all the errors on this tab, ",
                 "this is the friendliest: it tells you exactly what is wrong, and the ",
                 "fix is always to qualify it: ", kbd("s.lab_id"), ".")),
+            help_details("USING, and why to leave NATURAL JOIN alone",
+              tagList(
+                p(style = "margin-bottom:6px;", "When the key has the same name on both sides, ",
+                  kbd("JOIN labs l USING (lab_id)"), " is shorthand for ",
+                  kbd("ON s.lab_id = l.lab_id"), ", and it has the courtesy to return one ",
+                  kbd("lab_id"), " column in place of two."),
+                p(style = "margin-bottom:0;", kbd("NATURAL JOIN"), " goes a step further and joins on ",
+                  tags$em("every"), " column the two tables have in common, without being ",
+                  "told which. ", kbd("studies NATURAL JOIN labs"), " happens to work. ",
+                  kbd("studies NATURAL JOIN researchers"), " returns zero rows, because both ",
+                  "tables have a ", kbd("lab_id"), " and both have a ", kbd("title"),
+                  ", and no study's title is “PI.” A join whose meaning changes when ",
+                  "someone adds a column is one I'd counsel against."))),
             continue_button("joins_continue2"),
             id_prefix = "joins-step"
           )),
@@ -195,6 +227,12 @@ source_joins_server <- function(input, output, session) {
               "have nobody enrolled?” or “which participants signed up for nothing?” ",
               "Commit it to memory; “what is missing?” comes up in every dataset, and ",
               "there is no MISSING keyword."),
+            help_details("Tidying the NULLs a LEFT JOIN leaves behind",
+              tagList("In a report, Dr. Roams's blank lab reads better as a label. ",
+                kbd("COALESCE(l.lab_name, 'no lab')"), ", from the Functions tab, does it. ",
+                "Do the substituting in ", kbd("SELECT"), " only. The anti-join still has ",
+                "to test the real column in ", kbd("WHERE"), ", since a NULL you have ",
+                "papered over can no longer be found.")),
             continue_button("joins_continue3"),
             id_prefix = "joins-step"
           )),
@@ -263,12 +301,101 @@ source_joins_server <- function(input, output, session) {
             execution_order_ribbon(
               active = c("FROM"),
               note = "Joins happen in FROM, the very first step, building the combined row set that WHERE, GROUP BY, and SELECT then work on. Everything downstream sees the joined table, never the originals."),
-            continue_button("joins_done", "I've got JOINs ↓"),
+            continue_button("joins_continue5"),
+            id_prefix = "joins-step"
+          )),
+
+          # ===== STEP 6 =====
+          conditionalPanel("output.joins_step >= 6",
+          step_container(6, "RIGHT, FULL OUTER, and CROSS JOIN",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "A ", tags$code("RIGHT JOIN"), " keeps every row of the right relation, ",
+                "NULL-filling the left: a ", tags$code("LEFT JOIN"), " with its operands ",
+                "exchanged. A ", tags$code("FULL OUTER JOIN"), " keeps the unmatched rows ",
+                "of both. A ", tags$code("CROSS JOIN"), " has no ", tags$code("ON"),
+                " clause and returns the Cartesian product: every row of one relation ",
+                "paired with every row of the other."),
+              plain = tagList(tags$b("In human words. "),
+                kbd("LEFT"), " and ", kbd("RIGHT"), " differ only in which table you ",
+                "happened to write first, so most people pick ", kbd("LEFT"),
+                " and reorder the tables when they need the other one. ", kbd("FULL OUTER"),
+                " is for reconciling two lists: everything in either, matched up where ",
+                "possible. ", kbd("CROSS JOIN"), " is every combination, which is rarely ",
+                "what you want and occasionally exactly what you want."),
+              lab = tagList(tags$b("Lab database. "),
+                "Every lab at the institute has at least one researcher, so here ",
+                kbd("researchers FULL OUTER JOIN labs"), " returns what the ",
+                kbd("LEFT JOIN"), " did: 12 rows, Dr. Roams and her NULLs included. The ",
+                "extra rows appear only when the right side has orphans too. (Task 1 on ",
+                "the Changing data tab founds a lab with nobody in it. Run the same ",
+                "join there afterwards and the new lab gets a row of its own.)")
+            ),
+            sql_code("SELECT r.full_name, l.lab_name\nFROM researchers r\nFULL OUTER JOIN labs l ON r.lab_id = l.lab_id;"),
+            sql_editor("jsed6", starter = "SELECT r.full_name, l.lab_name\nFROM researchers r\nFULL OUTER JOIN labs l ON r.lab_id = l.lab_id;"),
+            p(style = "margin:14px 0 4px 0;", "And the cross join. Six labs, paired every ",
+              "possible way, with ", kbd("a.lab_id < b.lab_id"), " keeping one copy of each ",
+              "pair and no lab paired with itself:"),
+            sql_code("SELECT a.lab_name AS lab_a, b.lab_name AS lab_b\nFROM labs a\nCROSS JOIN labs b\nWHERE a.lab_id < b.lab_id;"),
+            sql_editor("jsed7", starter = "SELECT a.lab_name AS lab_a, b.lab_name AS lab_b\nFROM labs a\nCROSS JOIN labs b\nWHERE a.lab_id < b.lab_id;"),
+            callout_warm(tags$b("Cross joins multiply, literally. "),
+              "Those are the 15 possible two-lab collaborations, none of which has ",
+              "happened. Remove the ", kbd("WHERE"), " and there are 36 rows (6 × 6). ",
+              "Cross ", kbd("enrollments"), " with ", kbd("measurements"),
+              " and there are 25,721 (89 × 289), from two tables you could print on a few ",
+              "pages. On real tables an accidental cross join is how a query comes to run ",
+              "all night. The deliberate use is generating a full grid, e.g., every lab × ",
+              "every year, so that combinations with no data still get a row."),
+            help_details("If RIGHT or FULL OUTER JOIN gives an error",
+              tagList("SQLite added both in version 3.39, in 2022; before that it had only ",
+                kbd("INNER"), ", ", kbd("LEFT"), ", and ", kbd("CROSS"),
+                ". PostgreSQL, SQL Server, and Oracle have always had all of them. MySQL ",
+                "still has no ", kbd("FULL OUTER JOIN"), ", and the workaround there is a ",
+                kbd("LEFT JOIN"), " and a ", kbd("RIGHT JOIN"), " glued together with ",
+                kbd("UNION"), ", which is the subject of the next tab.")),
+            continue_button("joins_continue6"),
+            id_prefix = "joins-step"
+          )),
+
+          # ===== STEP 7 =====
+          conditionalPanel("output.joins_step >= 7",
+          step_container(7, "Self-joins: a table meets itself",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "A self-join joins a relation to itself. The two occurrences must be ",
+                "given distinct aliases, after which they behave as two independent ",
+                "tables. The join predicate need not be an equality: ",
+                tags$code("<"), ", ", tags$code("<>"), ", and ranges are all permitted ",
+                "(a non-equi join)."),
+              plain = tagList(tags$b("In human words. "),
+                "To compare rows of a table with other rows of the same table, list the ",
+                "table twice under two names and join the copies. There is no ",
+                kbd("SELF JOIN"), " keyword; it is an ordinary ", kbd("JOIN"),
+                " in which both sides happen to be the same table."),
+              lab = tagList(tags$b("Lab database. "),
+                "Who shares a lab with whom? Join ", kbd("researchers a"), " to ",
+                kbd("researchers b"), " on ", kbd("lab_id"), " and you get 23 rows: every ",
+                "pair twice (Albatross–Tern, then Tern–Albatross) and each of the eleven ",
+                "researchers who has a lab paired with themselves. Adding ",
+                kbd("a.researcher_id < b.researcher_id"), " leaves the six real pairs.")
+            ),
+            sql_code("SELECT a.full_name AS researcher_a, b.full_name AS researcher_b\nFROM researchers a\nJOIN researchers b\n  ON a.lab_id = b.lab_id\n AND a.researcher_id < b.researcher_id;"),
+            p(style = "margin:8px 0 4px 0;", "Run it, then delete the ", kbd("AND"),
+              " line to see the 23:"),
+            sql_editor("jsed8", starter = "SELECT a.full_name AS researcher_a, b.full_name AS researcher_b\nFROM researchers a\nJOIN researchers b\n  ON a.lab_id = b.lab_id\n AND a.researcher_id < b.researcher_id;", height = "140px"),
+            callout_warm(tags$b("Dr. Roams is in neither version. "),
+              "Her ", kbd("lab_id"), " is NULL, and ", kbd("NULL = NULL"),
+              " is unknown, so she does not even match herself. The same rule that ",
+              "governed ", kbd("WHERE"), " governs ", kbd("ON"), ". The classic self-join, ",
+              "for what it is worth, is an employee table whose ", kbd("manager_id"),
+              " points back at its own ", kbd("employee_id"), "; the institute has no ",
+              "such column, its reporting lines being what they are."),
+            continue_button("joins_done", "I've got JOINs \u2193"),
             id_prefix = "joins-step"
           )),
 
           # ===== QUEST =====
-          conditionalPanel("output.joins_step >= 5",
+          conditionalPanel("output.joins_step >= 7",
           quest_section(
             "Ten queries to make joining automatic",
             intro = p(style = "line-height:1.6; margin-bottom:0;",

@@ -5,7 +5,10 @@
 # where NULLs sort) then a 10-question quest. These questions are graded with
 # ordered = TRUE: row order is part of the answer, so the grader compares the
 # sequence, not just the set. References are minimal canonical queries so a
-# learner's identical query reproduces the same deterministic order.
+# learner's identical query reproduces the same deterministic order. Every
+# graded sort is a TOTAL order: where the main key has ties (two studies from
+# 2022, two crickets aged 1) the prompt names a tiebreaker, because SQL leaves
+# the order of tied rows undefined and an order-sensitive grader must not.
 # =============================================================================
 
 ORDER_QUEST <- list(
@@ -17,12 +20,14 @@ ORDER_QUEST <- list(
        ref = "SELECT full_name, salary FROM researchers WHERE salary IS NOT NULL ORDER BY salary DESC;",
        ordered = TRUE,
        solution = "SELECT full_name, salary FROM researchers WHERE salary IS NOT NULL ORDER BY salary DESC;"),
-  list(prompt = "Return the nickname of every participant, sorted alphabetically (A to Z).",
-       ref = "SELECT nickname FROM participants ORDER BY nickname;", ordered = TRUE,
-       solution = "SELECT nickname FROM participants ORDER BY nickname;"),
-  list(prompt = "Return title and year of all studies, newest year first.",
-       ref = "SELECT title, year FROM studies ORDER BY year DESC;", ordered = TRUE,
-       solution = "SELECT title, year FROM studies ORDER BY year DESC;"),
+  list(prompt = paste0("Return nickname and age of every participant, youngest first, with the ",
+                       "unknown ages at the end rather than the start. Break ties by nickname (A to Z)."),
+       ref = "SELECT nickname, age FROM participants ORDER BY age NULLS LAST, nickname;", ordered = TRUE,
+       solution = "SELECT nickname, age FROM participants ORDER BY age NULLS LAST, nickname;"),
+  list(prompt = paste0("Return title and year of all studies, newest year first. Two studies share ",
+                       "a year, so break ties by title (A to Z)."),
+       ref = "SELECT title, year FROM studies ORDER BY year DESC, title;", ordered = TRUE,
+       solution = "SELECT title, year FROM studies ORDER BY year DESC, title;"),
   list(prompt = paste0("Return title, status, and year of all studies, sorted by status ",
                        "(A to Z), then by year within each status."),
        ref = "SELECT title, status, year FROM studies ORDER BY status, year;", ordered = TRUE,
@@ -38,10 +43,11 @@ ORDER_QUEST <- list(
        ref = "SELECT title, sample_size FROM studies ORDER BY sample_size DESC LIMIT 1;", ordered = TRUE,
        solution = "SELECT title, sample_size FROM studies ORDER BY sample_size DESC LIMIT 1;"),
   list(prompt = paste0("Return nickname and age of the three youngest participants whose age ",
-                       "is known. (Ignore the unknown ages; step 5 explains why you must.)"),
-       ref = "SELECT nickname, age FROM participants WHERE age IS NOT NULL ORDER BY age LIMIT 3;",
+                       "is known. (Ignore the unknown ages; step 5 explains why you must.) Two ",
+                       "crickets are tied at age 1, so break ties by nickname."),
+       ref = "SELECT nickname, age FROM participants WHERE age IS NOT NULL ORDER BY age, nickname LIMIT 3;",
        ordered = TRUE,
-       solution = "SELECT nickname, age FROM participants WHERE age IS NOT NULL ORDER BY age LIMIT 3;"),
+       solution = "SELECT nickname, age FROM participants WHERE age IS NOT NULL ORDER BY age, nickname LIMIT 3;"),
   list(prompt = paste0("Return the lab_name and founded_year of the second- and third-oldest labs ",
                        "(skip the oldest). Use LIMIT and OFFSET."),
        ref = "SELECT lab_name, founded_year FROM labs ORDER BY founded_year LIMIT 2 OFFSET 1;", ordered = TRUE,
@@ -150,6 +156,21 @@ source_order_server <- function(input, output, session) {
               tagList("Each key is independent: ", kbd("ORDER BY status, year DESC"),
                 " sorts status A→Z but, within a status, newest year first. The ",
                 kbd("DESC"), " applies only to the key it follows, not to the whole clause.")),
+            callout_warm(tags$b("Tied rows come back in no promised order. "),
+              "Two studies are from 2022. ", kbd("ORDER BY year DESC"), " puts them ",
+              "next to each other and says nothing about which goes first; the database ",
+              "may answer differently tomorrow, or after an index is added. When the ",
+              "order of ties matters (and with ", kbd("LIMIT"), ", in the next step, it ",
+              "decides who makes the cut), add keys until no two rows can tie. A primary ",
+              "key as the last sort key always does it."),
+            help_details("Sorting by an expression, an alias, or a column number",
+              tagList(kbd("ORDER BY"), " takes any expression, not only a bare column: ",
+                kbd("ORDER BY salary * 1.03 DESC"), ". Because it runs after ",
+                kbd("SELECT"), ", it can also use a ", kbd("SELECT"), " alias, in every ",
+                "database: ", kbd("SELECT salary * 1.03 AS after_raise … ORDER BY after_raise"),
+                ". And ", kbd("ORDER BY 2"), " means “the second output column,” which is ",
+                "quick to type and breaks the day someone reorders the select list. I'd ",
+                "leave that one for throwaway queries.")),
             continue_button("order_continue2"),
             id_prefix = "order-step"
           )),
@@ -177,6 +198,13 @@ source_order_server <- function(input, output, session) {
               kbd("LIMIT 5"), " on its own gives you ", tags$em("some"),
               " five rows, not a meaningful “top 5.” Sort first. The database will not ",
               "warn you, because as far as it is concerned it did exactly what you asked."),
+            help_details("LIMIT elsewhere: TOP and FETCH FIRST",
+              tagList(kbd("LIMIT"), " is how SQLite, PostgreSQL, and MySQL say it. SQL ",
+                "Server writes ", kbd("SELECT TOP 3 …"), " at the front of the query ",
+                "instead, and the SQL standard's own spelling, which PostgreSQL, Oracle, ",
+                "and Db2 accept, is ", kbd("FETCH FIRST 3 ROWS ONLY"), " at the end. Same ",
+                "idea in all three; it is one of the more annoying dialect differences, ",
+                "since nearly every query someone hands you has one of them in it.")),
             continue_button("order_continue3"),
             id_prefix = "order-step"
           )),
@@ -199,6 +227,11 @@ source_order_server <- function(input, output, session) {
             ),
             sql_code("SELECT lab_name, founded_year\nFROM labs\nORDER BY founded_year\nLIMIT 2 OFFSET 1;"),
             sql_editor("osed4", starter = "SELECT lab_name, founded_year\nFROM labs\nORDER BY founded_year\nLIMIT 2 OFFSET 1;"),
+            callout_warm(tags$b("Paging needs a total order. "),
+              "If the sort has ties, page 1 and page 2 are each free to resolve them ",
+              "differently, and a row can turn up on both pages or on neither. The ",
+              "tiebreaker from step 2 stops being optional once ", kbd("OFFSET"),
+              " is involved."),
             continue_button("order_continue4"),
             id_prefix = "order-step"
           )),
@@ -211,7 +244,8 @@ source_order_server <- function(input, output, session) {
                 "In SQLite, ", tags$code("NULL"), " sorts as the lowest value: ",
                 "first under ", tags$code("ASC"), ", last under ", tags$code("DESC"),
                 ". A “smallest first” sort therefore surfaces the unknowns at the top. ",
-                "(Other databases make other choices; check before assuming.)"),
+                "The placement can be stated explicitly per sort key with ",
+                tags$code("NULLS FIRST"), " or ", tags$code("NULLS LAST"), "."),
               plain = tagList(tags$b("In human words. "),
                 "Unknown values clump at one end. Sort ages ascending and the ",
                 "unknown ages come first, which is rarely what you meant by ",
@@ -230,6 +264,18 @@ source_order_server <- function(input, output, session) {
               "but an ", kbd("ASC"), " bottom-N will pull NULLs in unless you exclude ",
               "them first. Ask yourself, before every ", kbd("LIMIT"), ", where the ",
               "unknowns will land."),
+            help_details("NULLS LAST, and what other databases do",
+              tagList(kbd("ORDER BY age NULLS LAST"), " keeps the ascending sort and moves ",
+                "the unknowns to the end, so the rows stay in the result but out of the ",
+                "way. SQLite, PostgreSQL, and Oracle accept it; MySQL and SQL Server do ",
+                "not. The default also varies: SQLite, MySQL, and SQL Server treat NULL ",
+                "as the smallest value, while PostgreSQL and Oracle treat it as the ",
+                "largest, so the same ", kbd("ORDER BY age"), " puts the seagulls first ",
+                "here and last there. If the position of the NULLs matters, say where ",
+                "you want them.")),
+            execution_order_ribbon(
+              active = c("ORDER BY", "LIMIT"),
+              note = "ORDER BY and LIMIT run last, once every row and column of the result exists. That is why LIMIT without ORDER BY cuts an unsorted pile, and why ORDER BY can refer to a SELECT alias when WHERE, by the standard, cannot."),
             continue_button("order_done", "I've got ORDER BY ↓"),
             id_prefix = "order-step"
           )),
@@ -240,13 +286,14 @@ source_order_server <- function(input, output, session) {
             "Ten queries to make sorting automatic",
             intro = tagList(
               p(style = "line-height:1.6; margin-bottom:4px;",
-                "These use ", kbd("ORDER BY"), ", ", kbd("LIMIT"), ", and ",
-                kbd("OFFSET"), ". Tables: ", kbd("labs"), ", ", kbd("researchers"),
+                "These use ", kbd("ORDER BY"), ", ", kbd("NULLS LAST"), ", ",
+                kbd("LIMIT"), ", and ", kbd("OFFSET"), ". Tables: ", kbd("labs"), ", ", kbd("researchers"),
                 ", ", kbd("studies"), ", ", kbd("participants"), "."),
               p(style = "line-height:1.6; margin-bottom:0; color:#7A4F00; font-size:13px;",
                 tags$b("Order counts here:"), " these are graded on the exact row ",
-                "order, so get the sort direction right. Elsewhere in the tutorial ",
-                "the grader is indifferent to order; here it is the whole point.")),
+                "order, so get the sort direction right, and where a prompt names a ",
+                "tiebreaker, use it. Elsewhere in the tutorial the grader is indifferent ",
+                "to order; here it is the whole point.")),
             quest_editors_ui(ORDER_QUEST, "ordq")
           ))
         )

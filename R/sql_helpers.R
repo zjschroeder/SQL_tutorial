@@ -2,12 +2,16 @@
 # sql_helpers.R — shared machinery for the SQL walkthrough app
 #
 # This file holds everything that is NEW relative to the PSY 302 stats app:
-#   - the database connection layer (read-only shared con; per-session copies)
-#   - run_query(): execute SQL, return a data frame OR a friendly error
-#   - the live SQL editor UI + server module (the analog of quest_question())
+#   - the database connection layer (read-only shared con; one private,
+#     schema-preserving scratch copy per session for the two writing tabs)
+#   - run_query(): execute any one statement, return a data frame, a rows-
+#     affected count, or a friendly error
+#   - the live SQL editor UI + server modules (read-only and writing)
 #   - check_answer(): grade a learner's result set against an expected one
-#   - execution_order_ribbon(): the recurring FROM→…→LIMIT clause widget
+#   - execution_order_ribbon() / written_order_ribbon(): the clause-order widgets
 #   - schema_explorer(): the clickable schema used on Tab 1 and in the sandbox
+#   - term_table(): the small reference tables used where a step lists several
+#     functions or keywords
 #
 # Everything visual here is built to match the stats app: same OI/PAL palette,
 # same card idiom, JetBrains Mono for code to match the app's code_font.
@@ -29,51 +33,143 @@ institute_con_ro <- function() {
   dbConnect(RSQLite::SQLite(), DB_PATH, flags = RSQLite::SQLITE_RO)
 }
 
-# For the CRUD tab: a private, disposable in-memory copy seeded from the file,
-# so a session can INSERT/UPDATE/DELETE freely and reset at will.
+# For the writing tabs (Changing data, Tables): a private, disposable in-memory
+# copy seeded from the file, so a session can INSERT/UPDATE/DELETE/CREATE freely
+# and reset at will.
+#
+# The copy is rebuilt from the CREATE statements stored in sqlite_master, not
+# with dbReadTable()/dbWriteTable(). The latter recreates each table from a data
+# frame and so drops every PRIMARY KEY, NOT NULL, DEFAULT, and FOREIGN KEY, plus
+# all four indexes, which would make half of what the writing tabs say about
+# constraints untrue on the copy the learner is actually typing into.
+#
+# Foreign-key enforcement is set OFF explicitly. That is SQLite's documented
+# default, but builds differ, and the Tables tab teaches switching it on, so the
+# starting state has to be the same everywhere.
 institute_con_scratch <- function() {
   src <- institute_con_ro()
   on.exit(dbDisconnect(src), add = TRUE)
   dst <- dbConnect(RSQLite::SQLite(), ":memory:")
-  for (t in dbListTables(src)) {
-    df <- dbReadTable(src, t)
-    dbWriteTable(dst, t, df, overwrite = TRUE)
+  dbExecute(dst, "PRAGMA foreign_keys = OFF;")
+  schema <- dbGetQuery(src, paste(
+    "SELECT type, name, sql FROM sqlite_master",
+    "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"))
+  tabs <- schema[schema$type == "table", , drop = FALSE]
+  rest <- schema[schema$type != "table", , drop = FALSE]
+  for (i in seq_len(nrow(tabs))) {
+    dbExecute(dst, tabs$sql[i])
+    df <- dbReadTable(src, tabs$name[i])
+    if (nrow(df) > 0) dbAppendTable(dst, tabs$name[i], df)
   }
+  for (i in seq_len(nrow(rest))) dbExecute(dst, rest$sql[i])   # indexes, views
+  # One table the shipped database does not have: a stale partial backup, so the
+  # Tables tab has something that can be DROPped without breaking anything.
+  dbExecute(dst, paste(
+    "CREATE TABLE participants_old AS",
+    "SELECT participant_id, nickname, species FROM participants",
+    "WHERE participant_id <= 12;"))
   dst
 }
 
-# ---- run_query: execute and never crash the app ----------------------------
-# Returns list(ok = TRUE, data = <df>) or list(ok = FALSE, error = <chr>).
-# We classify the statement so the query tabs can refuse data-modifying SQL on
-# the read-only connection with a friendly message instead of a raw SQLite error.
-sql_is_mutating <- function(sql) {
-  grepl("^\\s*(insert|update|delete|drop|alter|create|replace|truncate)\\b",
-        sql, ignore.case = TRUE)
+# One scratch connection per browser session, shared by every writing tab, so a
+# table created on the Tables tab is still there on the Changing-data tab and a
+# Reset on either tab resets both. Lives in session$userData.
+scratch_holder <- function(session) {
+  ud <- session$userData
+  if (is.null(ud$scratch_env)) {
+    env <- new.env(parent = emptyenv())
+    env$con <- NULL
+    ud$scratch_env <- env
+    session$onSessionEnded(function() {
+      if (!is.null(env$con) && dbIsValid(env$con)) dbDisconnect(env$con)
+    })
+  }
+  env <- ud$scratch_env
+  list(
+    get = function() {
+      if (is.null(env$con) || !dbIsValid(env$con)) env$con <- institute_con_scratch()
+      env$con
+    },
+    reset = function() {
+      if (!is.null(env$con) && dbIsValid(env$con)) dbDisconnect(env$con)
+      env$con <- institute_con_scratch()
+      invisible(env$con)
+    }
+  )
 }
+
+# ---- run_query: execute and never crash the app ----------------------------
+# Returns list(ok = TRUE, data = <df>), list(ok = TRUE, data = NULL, verb = ...,
+# affected = n), or list(ok = FALSE, error = <chr>). Any of them may carry a
+# `note` (shown under the result), used when SQLite ran only the first of
+# several statements.
+
+# Strip leading whitespace and leading comments (both -- and /* */ styles) so
+# the first real keyword can be read.
+sql_strip_leading <- function(sql) {
+  repeat {
+    before <- sql
+    sql <- sub("^\\s+", "", sql)
+    sql <- sub("^--[^\n]*(\n|$)", "", sql)
+    sql <- sub("^/\\*.*?\\*/", "", sql, perl = TRUE)
+    if (identical(sql, before)) break
+  }
+  sql
+}
+
+sql_first_word <- function(sql) {
+  tolower(sub("^([A-Za-z]+).*$", "\\1", sql_strip_leading(sql)))
+}
+
+# Statements the read-only query tabs decline up front, with a friendly message.
+# (The connection is opened read-only regardless; this only improves the error.)
+SQL_WRITE_VERBS <- c("insert", "update", "delete", "replace", "drop", "alter",
+                     "create", "truncate", "begin", "commit", "end", "rollback",
+                     "savepoint", "release", "vacuum", "reindex", "attach",
+                     "detach")
+
+sql_is_mutating <- function(sql) sql_first_word(sql) %in% SQL_WRITE_VERBS
 
 run_query <- function(con, sql, allow_mutation = FALSE) {
   sql <- trimws(sql)
-  if (!nzchar(sql)) {
+  if (!nzchar(sql_strip_leading(sql))) {
     return(list(ok = FALSE, error = "The editor is empty. Type a query, then press Run."))
   }
   if (!allow_mutation && sql_is_mutating(sql)) {
     return(list(ok = FALSE,
       error = paste0("This editor is read-only, so it runs SELECT queries and ",
                      "politely declines everything else. Statements that change ",
-                     "data get their own tab (", tags_b("Changing data"),
+                     "things get their own tabs (", tags_b("Changing data"),
+                     " and ", tags_b("Tables"),
                      "), with a private copy you are allowed to break.")))
   }
+  verb <- sql_first_word(sql)
+  note <- NULL
   out <- tryCatch(
-    {
-      if (allow_mutation && sql_is_mutating(sql)) {
-        n <- dbExecute(con, sql)
-        list(ok = TRUE, data = NULL, affected = n)
+    withCallingHandlers({
+      # dbSendQuery() accepts any statement. Whether it produced columns tells
+      # us if there are rows to fetch (SELECT, PRAGMA, EXPLAIN, ... RETURNING)
+      # or only a count of rows changed (INSERT, UPDATE, DELETE).
+      rs <- dbSendQuery(con, sql)
+      on.exit(try(dbClearResult(rs), silent = TRUE), add = TRUE)
+      if (nrow(dbColumnInfo(rs)) > 0) {
+        list(ok = TRUE, data = dbFetch(rs))
       } else {
-        list(ok = TRUE, data = dbGetQuery(con, sql))
+        n <- if (verb %in% c("insert", "update", "delete", "replace"))
+          dbGetRowsAffected(rs) else NA_integer_
+        list(ok = TRUE, data = NULL, verb = verb, affected = n)
       }
     },
+    warning = function(w) {
+      if (grepl("Ignoring remaining part of query", conditionMessage(w), fixed = TRUE)) {
+        note <<- paste0("Only the first statement ran. This editor takes one ",
+                        "statement per Run, so run the rest one at a time.")
+      }
+      invokeRestart("muffleWarning")
+    }),
     error = function(e) list(ok = FALSE, error = friendly_sql_error(conditionMessage(e)))
   )
+  out$note <- note
   out
 }
 
@@ -85,11 +181,35 @@ friendly_sql_error <- function(msg) {
   hint <- if (grepl("no such column", m)) {
     "SQLite does not recognize one of your column names. Check the spelling, and check that the column lives in a table you actually named in FROM; the second is the more common mistake."
   } else if (grepl("no such table", m)) {
-    "SQLite does not recognize one of your table names. The six tables are labs, researchers, studies, participants, enrollments, and measurements, all lower-case and all plural."
-  } else if (grepl("syntax error", m)) {
-    "SQLite hit a syntax error. The likeliest causes, in order: a missing comma between columns, an unclosed quote, or a clause out of order (FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT)."
+    "SQLite does not recognize one of your table names. The institute's six tables are labs, researchers, studies, participants, enrollments, and measurements, all plural. (On the writing tabs, a table you created is gone after a Reset.)"
   } else if (grepl("ambiguous column name", m)) {
     "Two of the joined tables share that column name, so SQLite cannot tell which one you mean. Qualify it: studies.lab_id rather than lab_id."
+  } else if (grepl("misuse of aggregate", m)) {
+    "An aggregate such as COUNT() or AVG() has turned up somewhere it cannot run, usually in WHERE. WHERE filters rows before any group exists, so a test on a group's total belongs in HAVING."
+  } else if (grepl("misuse of (aliased )?window function", m)) {
+    "A window function has turned up in WHERE, GROUP BY, or HAVING. Windows are computed after all three, so the value does not exist yet. Compute it in a subquery or CTE, then filter in the outer query."
+  } else if (grepl("do not have the same number of result columns", m)) {
+    "The two SELECTs either side of UNION / INTERSECT / EXCEPT return different numbers of columns. They have to match, column for column."
+  } else if (grepl("unique constraint failed", m)) {
+    "That value is already taken in a column that has to be unique (a PRIMARY KEY or UNIQUE column). Pick an unused value, or use ON CONFLICT to say what should happen instead."
+  } else if (grepl("not null constraint failed", m)) {
+    "That column is declared NOT NULL and the statement left it empty. Supply a value for it."
+  } else if (grepl("check constraint failed", m)) {
+    "The row broke a CHECK rule declared on the table, so SQLite refused it."
+  } else if (grepl("foreign key constraint failed", m)) {
+    "Foreign-key enforcement is on, and this change would leave a row pointing at a parent that does not exist (or delete a parent that still has children). Change the children first, or run PRAGMA foreign_keys = OFF; to stop enforcing."
+  } else if (grepl("within a transaction", m)) {
+    "A transaction is already open on your copy, and transactions do not nest. COMMIT or ROLLBACK the open one first."
+  } else if (grepl("no transaction is active", m)) {
+    "There is no open transaction to finish. COMMIT and ROLLBACK only mean something after a BEGIN."
+  } else if (grepl("already exists", m)) {
+    "Something with that name already exists in your copy. Drop it first, choose another name, or press Reset."
+  } else if (grepl("readonly database", m)) {
+    "This editor's connection is read-only. Statements that change things run on the Changing data and Tables tabs."
+  } else if (grepl("right and full outer joins are not currently supported", m)) {
+    "This build of SQLite predates version 3.39 (2022), which added RIGHT and FULL OUTER JOIN. Swap the table order and use LEFT JOIN."
+  } else if (grepl("syntax error", m)) {
+    "SQLite hit a syntax error. The likeliest causes, in order: a missing comma between columns, an unclosed quote, a stray comma before FROM, or clauses written out of order (they go SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT)."
   } else {
     NULL
   }
@@ -113,6 +233,9 @@ normalize_df <- function(df, ordered = FALSE) {
 
 check_answer <- function(user_df, expected_df, ordered = FALSE,
                          check_names = TRUE) {
+  if (is.null(expected_df)) {
+    return(list(pass = FALSE, msg = "This question cannot be graded on this build of SQLite (the reference query would not run). Show a solution has the answer."))
+  }
   if (is.null(user_df)) {
     return(list(pass = FALSE, msg = "That query did not return a table, so there is nothing to check yet."))
   }
@@ -131,9 +254,14 @@ check_answer <- function(user_df, expected_df, ordered = FALSE,
   if (identical(same, TRUE)) {
     list(pass = TRUE, msg = "Correct. The result set matches the target.")
   } else {
-    list(pass = FALSE, msg = sprintf(
-      "Not yet. Your query returned %d row%s; the target has %d. Compare the two tables below and look for who is missing or who snuck in.",
-      nrow(u), if (nrow(u) == 1) "" else "s", nrow(e)))
+    msg <- if (nrow(u) != nrow(e)) {
+      sprintf("Not yet. Your query returned %d row%s; the target has %d. Look for who is missing, or who snuck in.",
+              nrow(u), if (nrow(u) == 1) "" else "s", nrow(e))
+    } else {
+      sprintf("Not yet. The row count is right (%d) and the columns are named correctly, but the values differ from the target. Reread what each column should contain%s.",
+              nrow(e), if (ordered) ", and the sort order, which this question grades" else "")
+    }
+    list(pass = FALSE, msg = msg)
   }
 }
 
@@ -187,30 +315,7 @@ sql_editor_server <- function(id, input, output, session, con_fun,
   ns_id <- function(suffix) paste0(id, "_", suffix)
   store <- reactiveValues(last = NULL, verdict = NULL)
 
-  render_table <- function(res) {
-    if (!res$ok) {
-      return(div(class = "p-3 mt-2",
-        style = "background:#FFF1D6; color:#7A4F00; border-radius:8px; white-space:pre-wrap; font-size:13.5px; line-height:1.5;",
-        HTML(gsub("\n", "<br>", res$error))))
-    }
-    if (is.null(res$data)) {
-      return(div(class = "p-3 mt-2",
-        style = "background:#E1F5EE; color:#0F6E56; border-radius:8px;",
-        sprintf("Done. %d row%s affected.", res$affected %||% 0,
-                if ((res$affected %||% 0) == 1) "" else "s")))
-    }
-    df <- res$data
-    n  <- nrow(df)
-    cap <- 200
-    shown <- utils::head(df, cap)
-    tagList(
-      div(class = "mt-2", style = "overflow-x:auto; border:1px solid #e0e6ea; border-radius:8px;",
-          render_html_table(shown)),
-      div(style = "color:#6b7c85; font-size:12px; margin-top:4px;",
-          sprintf("%d row%s%s", n, if (n == 1) "" else "s",
-                  if (n > cap) sprintf("  \u00b7  showing first %d", cap) else ""))
-    )
-  }
+  render_table <- function(res) render_result_block(res)
 
   observeEvent(input[[ns_id("run")]], {
     con <- con_fun(); on.exit(dbDisconnect(con), add = TRUE)
@@ -287,15 +392,41 @@ render_html_table <- function(df) {
 }
 
 # ---- execution_order_ribbon: the recurring clause-order widget ---------------
-# Renders the logical processing order FROM → WHERE → GROUP BY → HAVING →
-# SELECT → DISTINCT → ORDER BY → LIMIT as a horizontal ribbon. Pass `active` =
-# one of the clause keys to spotlight it; pass `dim` = clauses to grey out.
-EXEC_ORDER <- c("FROM", "WHERE", "GROUP BY", "HAVING",
-                "SELECT", "DISTINCT", "ORDER BY", "LIMIT")
+# Renders the LOGICAL processing order of a SELECT as a horizontal ribbon. Pass
+# `active` = one or more keys (the names of EXEC_ORDER) to spotlight them.
+#
+# Every chip on this ribbon is taught, and lit, on some tab:
+#   FROM      SELECT (step 5), JOINs (step 5)     WINDOW    Windows (step 7)
+#   WHERE     WHERE (step 5), GROUP BY (step 4)   SELECT    SELECT (step 5)
+#   GROUP BY  GROUP BY (step 4)                   DISTINCT  SELECT (step 4)
+#   HAVING    GROUP BY (step 4)                   SET       UNION (step 5)
+#   ORDER BY, LIMIT   ORDER BY (step 5)
+# If you add a chip, light it somewhere; if you stop teaching a clause, drop it.
+#
+# The order follows the SQL standard's logical model and SQLite's own account of
+# SELECT processing (sqlite.org/lang_select.html): joins are part of FROM;
+# window functions are evaluated with the select list, after HAVING; compound
+# operators combine finished SELECTs; ORDER BY and LIMIT/OFFSET come last.
+EXEC_ORDER <- c(
+  "FROM"     = "FROM / JOIN",
+  "WHERE"    = "WHERE",
+  "GROUP BY" = "GROUP BY",
+  "HAVING"   = "HAVING",
+  "WINDOW"   = "window functions",
+  "SELECT"   = "SELECT",
+  "DISTINCT" = "DISTINCT",
+  "SET"      = "UNION / INTERSECT / EXCEPT",
+  "ORDER BY" = "ORDER BY",
+  "LIMIT"    = "LIMIT / OFFSET"
+)
 
-execution_order_ribbon <- function(active = NULL, note = NULL) {
-  chip <- function(label) {
-    on <- !is.null(active) && label %in% active
+# The order the clauses must be WRITTEN in, for the Start tab's side-by-side.
+WRITTEN_ORDER <- c("SELECT", "DISTINCT", "FROM / JOIN", "WHERE", "GROUP BY",
+                   "HAVING", "UNION / INTERSECT / EXCEPT", "ORDER BY",
+                   "LIMIT / OFFSET")
+
+.ribbon <- function(title, labels, lit, note = NULL) {
+  chip <- function(label, on) {
     div(class = "exec-chip", style = sprintf(
       "padding:6px 12px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:600; white-space:nowrap; %s",
       if (on) "background:#0072B2; color:#fff; box-shadow:0 2px 6px rgba(0,114,178,0.3);"
@@ -303,21 +434,30 @@ execution_order_ribbon <- function(active = NULL, note = NULL) {
       label)
   }
   arrow <- function() tags$span(style = "color:#b8c6cc; font-size:14px; flex-shrink:0;", HTML("&rarr;"))
-  # Build [chip1, ->, chip2, ->, ...] as a flat tag list.
-  chip_seq <- c(
-    list(chip(EXEC_ORDER[1])),
-    unlist(lapply(EXEC_ORDER[-1], function(l) list(arrow(), chip(l))),
-           recursive = FALSE)
-  )
+  chips <- list(chip(labels[1], lit[1]))
+  for (i in seq_along(labels)[-1]) chips <- c(chips, list(arrow(), chip(labels[i], lit[i])))
   div(class = "exec-ribbon my-3",
       div(style = "display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:12px 14px; background:#f6fafb; border:1px solid #e0e6ea; border-radius:10px;",
           tags$span(style = "font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#6b7c85; margin-right:4px;",
-                    "SQL runs in this order"),
-          chip_seq
+                    title),
+          chips
       ),
       if (!is.null(note))
         div(style = "font-size:12.5px; color:#6b7c85; margin-top:6px; padding-left:4px;", note)
   )
+}
+
+execution_order_ribbon <- function(active = NULL, note = NULL) {
+  unknown <- setdiff(active, names(EXEC_ORDER))
+  if (length(unknown)) stop("execution_order_ribbon(): unknown key(s): ",
+                            paste(unknown, collapse = ", "))
+  .ribbon("SQL runs in this order", unname(EXEC_ORDER),
+          names(EXEC_ORDER) %in% active, note)
+}
+
+written_order_ribbon <- function(note = NULL) {
+  .ribbon("You write it in this order", WRITTEN_ORDER,
+          rep(FALSE, length(WRITTEN_ORDER)), note)
 }
 
 # ---- schema_explorer: clickable table cards ---------------------------------
@@ -406,6 +546,16 @@ quest_editors_ui <- function(quest, prefix) {
   })
 }
 
+# Run a quest's reference query to get its expected result set. A reference
+# that fails (say, on a SQLite build too old for the syntax) must not take the
+# whole app down at startup, so it yields NULL and that one question reports
+# that it cannot be graded here.
+quest_expected <- function(ref) {
+  con0 <- institute_con_ro()
+  on.exit(dbDisconnect(con0), add = TRUE)
+  tryCatch(dbGetQuery(con0, ref), error = function(e) NULL)
+}
+
 # Wire every graded editor in a quest: compute each expected result set by
 # running its reference query against the read-only DB, then attach the server.
 wire_quest_editors <- function(quest, prefix, input, output, session) {
@@ -413,7 +563,7 @@ wire_quest_editors <- function(quest, prefix, input, output, session) {
     local({
       idx <- i
       q   <- quest[[idx]]
-      con0 <- institute_con_ro(); expected <- dbGetQuery(con0, q$ref); dbDisconnect(con0)
+      expected <- quest_expected(q$ref)
       sql_editor_server(
         id = paste0(prefix, idx), input = input, output = output, session = session,
         con_fun = institute_con_ro, expected = expected,
@@ -434,19 +584,27 @@ wire_demo_editors <- function(prefix, n, input, output, session) {
   }
 }
 
-# Render a run_query() result (error panel / rows-affected / table). Used by the
-# CRUD editor below; mirrors the read-only editor's inline renderer.
+# Render a run_query() result (error panel / done message / table), plus the
+# optional note. Shared by the read-only and the writing editors.
 render_result_block <- function(res) {
+  note <- if (!is.null(res$note))
+    div(style = "color:#7A4F00; font-size:12.5px; margin-top:6px;", res$note)
   if (!res$ok) {
     return(div(class = "p-3 mt-2",
       style = "background:#FFF1D6; color:#7A4F00; border-radius:8px; white-space:pre-wrap; font-size:13.5px; line-height:1.5;",
       HTML(gsub("\n", "<br>", res$error))))
   }
   if (is.null(res$data)) {
-    return(div(class = "p-3 mt-2",
-      style = "background:#E1F5EE; color:#0F6E56; border-radius:8px;",
-      sprintf("Done. %d row%s affected.", res$affected %||% 0,
-              if ((res$affected %||% 0) == 1) "" else "s")))
+    n <- res$affected
+    msg <- if (is.null(n) || is.na(n)) {
+      "Done. Nothing to show; this statement does not return rows."
+    } else {
+      sprintf("Done. %d row%s affected.", n, if (n == 1) "" else "s")
+    }
+    return(tagList(
+      div(class = "p-3 mt-2",
+          style = "background:#E1F5EE; color:#0F6E56; border-radius:8px;", msg),
+      note))
   }
   df <- res$data; n <- nrow(df); cap <- 200; shown <- utils::head(df, cap)
   tagList(
@@ -454,7 +612,8 @@ render_result_block <- function(res) {
         render_html_table(shown)),
     div(style = "color:#6b7c85; font-size:12px; margin-top:4px;",
         sprintf("%d row%s%s", n, if (n == 1) "" else "s",
-                if (n > cap) sprintf("  ·  showing first %d", cap) else "")))
+                if (n > cap) sprintf("  \u00b7  showing first %d", cap) else "")),
+    note)
 }
 
 # ---- CRUD live editor: stateful, mutation-allowed ---------------------------
@@ -479,6 +638,13 @@ sql_editor_server_crud <- function(id, input, output, session, con_holder,
       con <- con_holder()
       got <- tryCatch(dbGetQuery(con, verify), error = function(e) NULL)
       v <- check_answer(got, expected, ordered = FALSE)
+      # check_answer()'s wording is about a query's result; here we inspected
+      # the state of the copy, so say that instead.
+      v$msg <- if (isTRUE(v$pass)) {
+        "Correct. Your copy is in the target state."
+      } else {
+        "Not yet. Your copy is not in the target state. Check only inspects, so press Run first; if earlier experiments are in the way, Reset."
+      }
       output[[ns_id("verdict")]] <- renderUI({
         col  <- if (isTRUE(v$pass)) c("#E1F5EE", "#0F6E56") else c("#FFF1D6", "#7A4F00")
         mark <- if (isTRUE(v$pass)) "✓ " else ""
@@ -496,4 +662,56 @@ sql_editor_server_crud <- function(id, input, output, session, con_holder,
             solution))
     })
   }
+}
+
+# Wire the graded tasks of a writing tab. Each task's expected post-state is
+# computed once, at startup, by applying its `solution` to a fresh scratch copy
+# and running its `verify` query there.
+wire_crud_quest <- function(quest, prefix, input, output, session, con_holder) {
+  for (i in seq_along(quest)) {
+    local({
+      idx <- i
+      q   <- quest[[idx]]
+      con_tmp <- institute_con_scratch()
+      expected <- tryCatch({
+        dbExecute(con_tmp, q$solution)
+        dbGetQuery(con_tmp, q$verify)
+      }, error = function(e) NULL)
+      dbDisconnect(con_tmp)
+      sql_editor_server_crud(
+        id = paste0(prefix, idx), input = input, output = output, session = session,
+        con_holder = con_holder, verify = q$verify,
+        expected = expected, solution = q$solution)
+    })
+  }
+}
+
+# The "this is your private copy" bar with its Reset button, used at the top of
+# both writing tabs. `btn_id` / `msg_id` differ per tab; both reset the one
+# shared copy.
+scratch_reset_bar <- function(btn_id, msg_id) {
+  div(class = "p-3 my-3 d-flex",
+      style = "background:#E1F1FB; border-radius:10px; align-items:center; gap:14px; flex-wrap:wrap;",
+      div(style = "flex:1; min-width:220px;",
+          div(style = "font-weight:700; color:#003D6B;", "This is your private copy."),
+          div(style = "font-size:13px; color:#244; line-height:1.5;",
+              "Nothing you do here touches the real database or anyone else's ",
+              "session. The Changing data and Tables tabs share this one copy, so a ",
+              "table you create on one is there on the other. Break it with a clear ",
+              "conscience, and reset whenever you want a clean slate.")),
+      div(actionButton(btn_id, "\u21ba Reset my copy", class = "btn-outline-secondary btn-sm"),
+          uiOutput(msg_id)))
+}
+
+# A small reference table for the steps that list several functions or
+# keywords at once. `rows` is a list of c(term, meaning) pairs.
+term_table <- function(rows, head = c("Write", "Get")) {
+  tags$table(class = "my-3",
+    style = "width:100%; border-collapse:collapse; background:#fff; border:1px solid #e0e6ea; border-radius:8px; overflow:hidden;",
+    tags$thead(tags$tr(lapply(head, function(h)
+      tags$th(style = "text-align:left; padding:7px 12px; background:#eef4f6; color:#1a3a4a; font-weight:600; font-size:12.5px; border-bottom:2px solid #d8e3e8;", h)))),
+    tags$tbody(lapply(rows, function(r)
+      tags$tr(
+        tags$td(style = "padding:6px 12px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#0072B2; white-space:nowrap; vertical-align:top; border-bottom:1px solid #f0f3f5;", r[1]),
+        tags$td(style = "padding:6px 12px; font-size:13.5px; color:#243b44; line-height:1.5; border-bottom:1px solid #f0f3f5;", r[2])))))
 }

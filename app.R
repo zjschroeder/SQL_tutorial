@@ -7,7 +7,9 @@
 # Each query tab is a short sequence of gated concept steps (Continue to
 # unlock), each adding one clause to a query the learner watches grow, and ends
 # with a "Now you try" section of 10 live-editor questions graded by comparing
-# the learner's result set to the expected one. All SQL runs in the browser via
+# the learner's result set to the expected one. The two writing tabs (Changing
+# data, Tables) run on a private per-session copy and are graded by inspecting
+# that copy's state afterwards. All SQL runs in the browser via
 # DBI + RSQLite compiled to WebAssembly (webR / Shinylive) — no server.
 #
 # Running database: data/institute.sqlite, "The Institute for Highly
@@ -213,10 +215,13 @@ ui <- page_navbar(
   nav_panel(title = "WHERE",           uiOutput("where_tab_ui")),
   nav_panel(title = "ORDER BY",        uiOutput("order_tab_ui")),
   nav_panel(title = "GROUP BY",        uiOutput("group_tab_ui")),
+  nav_panel(title = "Functions",       uiOutput("functions_tab_ui")),
   nav_panel(title = "JOINs",           uiOutput("joins_tab_ui")),
+  nav_panel(title = "UNION",           uiOutput("union_tab_ui")),
   nav_panel(title = "Subqueries",      uiOutput("subqueries_tab_ui")),
   nav_panel(title = "Windows",         uiOutput("windows_tab_ui")),
   nav_panel(title = "Changing data",   uiOutput("changing_tab_ui")),
+  nav_panel(title = "Tables",          uiOutput("tables_tab_ui")),
   nav_panel(title = "Put it together", uiOutput("capstone_tab_ui"))
 )
 
@@ -229,10 +234,13 @@ server <- function(input, output, session) {
   if (exists("source_where_server"))      source_where_server(input, output, session)
   if (exists("source_order_server"))      source_order_server(input, output, session)
   if (exists("source_group_server"))      source_group_server(input, output, session)
+  if (exists("source_functions_server"))  source_functions_server(input, output, session)
   if (exists("source_joins_server"))      source_joins_server(input, output, session)
+  if (exists("source_union_server"))      source_union_server(input, output, session)
   if (exists("source_subqueries_server")) source_subqueries_server(input, output, session)
   if (exists("source_windows_server"))    source_windows_server(input, output, session)
   if (exists("source_changing_server"))   source_changing_server(input, output, session)
+  if (exists("source_tables_server"))     source_tables_server(input, output, session)
   if (exists("source_capstone_server"))   source_capstone_server(input, output, session)
 }
 

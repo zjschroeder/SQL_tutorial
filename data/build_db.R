@@ -6,7 +6,7 @@
 # absurd studies students met in the PSY 302 app (seagull staring, peas in ears,
 # Daves knowing Daves) plus a few new ones.
 #
-# Schema (7 tables):
+# Schema (6 tables, 5 relationships, 6 foreign keys):
 #   labs           1───∞ researchers
 #   labs           1───∞ studies
 #   researchers    1───∞ studies            (as lead_researcher)

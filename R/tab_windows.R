@@ -1,8 +1,9 @@
 # =============================================================================
 # tab_windows.R — "Window functions" walkthrough (Tab 8)
 #
-# Five gated steps (aggregate OVER () without collapsing; PARTITION BY; ranking
-# ROW_NUMBER/RANK/DENSE_RANK; order-aware running totals; LAG/LEAD) then a
+# Seven gated steps (aggregate OVER () without collapsing; PARTITION BY; ranking
+# ROW_NUMBER/RANK/DENSE_RANK; order-aware running totals; LAG/LEAD; frames with
+# ROWS BETWEEN; filtering on a window via a CTE, NTILE, FIRST_VALUE) then a
 # 10-question quest. The order-aware items use the measurements table, whose
 # repeated trials per enrollment are made for this.
 # =============================================================================
@@ -28,26 +29,30 @@ WIN_QUEST <- list(
        ref = "SELECT full_name, lab_id, salary, RANK() OVER (PARTITION BY lab_id ORDER BY salary DESC) AS lab_rank FROM researchers WHERE salary IS NOT NULL;",
        ordered = FALSE,
        solution = "SELECT full_name, lab_id, salary,\n       RANK() OVER (PARTITION BY lab_id ORDER BY salary DESC) AS lab_rank\nFROM researchers\nWHERE salary IS NOT NULL;"),
-  list(prompt = paste0("For each measurement, return enrollment_id, trial, value, and a row number ",
-                       "within its enrollment ordered by trial, as rn. Use ROW_NUMBER()."),
-       ref = "SELECT enrollment_id, trial, value, ROW_NUMBER() OVER (PARTITION BY enrollment_id ORDER BY trial) AS rn FROM measurements;",
+  list(prompt = paste0("Return the full_name, lab_id, and salary of the best-paid researcher in each ",
+                       "lab, among those with a known salary. (Dr. Roams's NULL lab_id counts as a ",
+                       "lab of one.) Number the rows within each lab with ROW_NUMBER() in a CTE, ",
+                       "then keep the 1s."),
+       ref = "WITH ranked AS (SELECT full_name, lab_id, salary, ROW_NUMBER() OVER (PARTITION BY lab_id ORDER BY salary DESC) AS rn FROM researchers WHERE salary IS NOT NULL) SELECT full_name, lab_id, salary FROM ranked WHERE rn = 1;",
        ordered = FALSE,
-       solution = "SELECT enrollment_id, trial, value,\n       ROW_NUMBER() OVER (PARTITION BY enrollment_id ORDER BY trial) AS rn\nFROM measurements;"),
+       solution = "WITH ranked AS (\n  SELECT full_name, lab_id, salary,\n         ROW_NUMBER() OVER (PARTITION BY lab_id ORDER BY salary DESC) AS rn\n  FROM researchers\n  WHERE salary IS NOT NULL\n)\nSELECT full_name, lab_id, salary\nFROM ranked\nWHERE rn = 1;"),
   list(prompt = paste0("For each measurement, return enrollment_id, trial, value, and the running ",
                        "total of value within its enrollment ordered by trial, as running_total."),
        ref = "SELECT enrollment_id, trial, value, SUM(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS running_total FROM measurements;",
        ordered = FALSE,
        solution = "SELECT enrollment_id, trial, value,\n       SUM(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS running_total\nFROM measurements;"),
-  list(prompt = paste0("For each measurement, return enrollment_id, trial, value, and the previous ",
-                       "trial's value within the enrollment as prev_value. Use LAG()."),
-       ref = "SELECT enrollment_id, trial, value, LAG(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS prev_value FROM measurements;",
+  list(prompt = paste0("For each measurement, return enrollment_id, trial, value, the previous ",
+                       "trial's value within the enrollment as prev_value, and the next trial's as ",
+                       "next_value. Use LAG() and LEAD()."),
+       ref = "SELECT enrollment_id, trial, value, LAG(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS prev_value, LEAD(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS next_value FROM measurements;",
        ordered = FALSE,
-       solution = "SELECT enrollment_id, trial, value,\n       LAG(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS prev_value\nFROM measurements;"),
-  list(prompt = paste0("For each measurement, return enrollment_id, trial, value, and the next ",
-                       "trial's value within the enrollment as next_value. Use LEAD()."),
-       ref = "SELECT enrollment_id, trial, value, LEAD(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS next_value FROM measurements;",
+       solution = "SELECT enrollment_id, trial, value,\n       LAG(value)  OVER (PARTITION BY enrollment_id ORDER BY trial) AS prev_value,\n       LEAD(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS next_value\nFROM measurements;"),
+  list(prompt = paste0("For each measurement, return enrollment_id, trial, value, and the average of ",
+                       "this trial and the two before it within the enrollment, as moving_avg. ",
+                       "Use a ROWS BETWEEN frame."),
+       ref = "SELECT enrollment_id, trial, value, AVG(value) OVER (PARTITION BY enrollment_id ORDER BY trial ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS moving_avg FROM measurements;",
        ordered = FALSE,
-       solution = "SELECT enrollment_id, trial, value,\n       LEAD(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS next_value\nFROM measurements;"),
+       solution = "SELECT enrollment_id, trial, value,\n       AVG(value) OVER (PARTITION BY enrollment_id ORDER BY trial\n                        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS moving_avg\nFROM measurements;"),
   list(prompt = paste0("For each measurement, return enrollment_id, trial, and value minus the ",
                        "previous trial's value as delta. (The first trial's delta is NULL; it has ",
                        "nothing to be compared with.)"),
@@ -66,7 +71,9 @@ WIN_STEP_TITLES <- c(
   "Per-group windows: PARTITION BY",
   "Ranking: ROW_NUMBER, RANK, DENSE_RANK",
   "Order-aware windows: running totals",
-  "Looking at neighbors: LAG and LEAD"
+  "Looking at neighbors: LAG and LEAD",
+  "Frames: ROWS BETWEEN",
+  "Filtering on a window; NTILE, FIRST_VALUE"
 )
 
 source_windows_server <- function(input, output, session) {
@@ -79,11 +86,13 @@ source_windows_server <- function(input, output, session) {
   observeEvent(input$win_continue2, walk$step <- max(walk$step, 3))
   observeEvent(input$win_continue3, walk$step <- max(walk$step, 4))
   observeEvent(input$win_continue4, walk$step <- max(walk$step, 5))
+  observeEvent(input$win_continue5, walk$step <- max(walk$step, 6))
+  observeEvent(input$win_continue6, walk$step <- max(walk$step, 7))
 
   output$win_toc <- renderUI(
     walkthrough_toc(walk$step, WIN_STEP_TITLES, "win-step"))
 
-  wire_demo_editors("nsed", 5, input, output, session)
+  wire_demo_editors("nsed", 8, input, output, session)
   wire_quest_editors(WIN_QUEST, "winq", input, output, session)
 
   output$windows_tab_ui <- renderUI({
@@ -206,8 +215,8 @@ source_windows_server <- function(input, output, session) {
               formal = tagList(tags$b("Academic. "),
                 "With an ", tags$code("ORDER BY"), " inside ", tags$code("OVER"),
                 ", an aggregate accumulates over the rows up to and including the ",
-                "current one (the default frame), producing running totals, ",
-                "moving sums, and the like."),
+                "current one (the default frame, which step 6 states precisely), ",
+                "producing running totals."),
               plain = tagList(tags$b("In human words. "),
                 "Order the window, and ", kbd("SUM"),
                 " becomes a running total: the sum so far, row by row. Same function, ",
@@ -248,24 +257,135 @@ source_windows_server <- function(input, output, session) {
             ),
             sql_code("SELECT enrollment_id, trial, value,\n       LAG(value)  OVER (PARTITION BY enrollment_id ORDER BY trial) AS prev_value,\n       LEAD(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS next_value\nFROM measurements;"),
             sql_editor("nsed5", starter = "SELECT enrollment_id, trial, value,\n       LAG(value)  OVER (PARTITION BY enrollment_id ORDER BY trial) AS prev_value,\n       LEAD(value) OVER (PARTITION BY enrollment_id ORDER BY trial) AS next_value\nFROM measurements;"),
-            callout_warm(tags$b("Windows run late. "),
-              "Window functions are computed after ", kbd("WHERE"), ", ", kbd("GROUP BY"),
-              ", and ", kbd("HAVING"), ", near the end of the pipeline, which is why ",
-              "you cannot filter on a window result in ", kbd("WHERE"),
-              ": it does not exist yet when WHERE runs. Wrap the query in a subquery ",
-              "or CTE (previous tab) and filter the outer query instead."),
-            continue_button("win_done", "I've got window functions ↓"),
+            help_details("LAG(value, 2), and LAG(value, 1, 0)",
+              tagList("Both functions take two optional arguments: how many rows to reach ",
+                "back (or forward), and what to return when there is no such row. ",
+                kbd("LAG(value, 2)"), " is the trial before last; ", kbd("LAG(value, 1, 0)"),
+                " returns 0 at the first trial where it would otherwise return NULL. The ",
+                "caution from the Functions tab about stand-in values applies: a first ",
+                "trial's change from “0” is a large number that means nothing.")),
+            continue_button("win_continue5"),
+            id_prefix = "win-step"
+          )),
+
+          # ===== STEP 6 =====
+          conditionalPanel("output.win_step >= 6",
+          step_container(6, "Frames: ROWS BETWEEN",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "Within a partition, the ", tags$em("frame"), " is the subset of rows an ",
+                "aggregate window function is computed over for the current row. It is ",
+                "specified as ", tags$code("ROWS BETWEEN <start> AND <end>"),
+                ", with bounds ", tags$code("UNBOUNDED PRECEDING"), ", ",
+                tags$code("n PRECEDING"), ", ", tags$code("CURRENT ROW"), ", ",
+                tags$code("n FOLLOWING"), ", and ", tags$code("UNBOUNDED FOLLOWING"),
+                ". When ", tags$code("ORDER BY"), " is present and no frame is given, the ",
+                "default is ", tags$code("RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"),
+                ", which extends to every row tied with the current one."),
+              plain = tagList(tags$b("In human words. "),
+                "The partition says which rows are in the same group as this one. The ",
+                "frame says which of those rows to use right now: all of them so far (a ",
+                "running total), the last three (a moving average), or this one and its ",
+                "two neighbors. Step 4's running total was a frame all along; you were ",
+                "using the default without being told."),
+              lab = tagList(tags$b("Lab database. "),
+                "Enrollment 2's five trials read 7.95, 5.49, 5.79, 7.27, 7.46. A frame of ",
+                kbd("2 PRECEDING AND CURRENT ROW"), " averages each trial with the two ",
+                "before it: 6.41 at trial 3, 6.18 at trial 4. Trials 1 and 2 have fewer ",
+                "than two predecessors, so their averages are over one and two values.")
+            ),
+            sql_code("SELECT enrollment_id, trial, value,\n       AVG(value) OVER (PARTITION BY enrollment_id ORDER BY trial\n                        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS moving_avg\nFROM measurements;"),
+            sql_editor("nsed6", starter = "SELECT enrollment_id, trial, value,\n       AVG(value) OVER (PARTITION BY enrollment_id ORDER BY trial\n                        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS moving_avg\nFROM measurements;", height = "140px"),
+            callout_warm(tags$b("A cautionary note on the default frame. "),
+              "The default is a ", kbd("RANGE"), " frame, and ", kbd("RANGE"),
+              " counts rows that tie on the ", kbd("ORDER BY"), " as arriving together. ",
+              "Two studies are from 2022, each with 50 participants. A running total of ",
+              kbd("sample_size"), " ordered by ", kbd("year"), " therefore reads 489 for ",
+              "both of them, where you probably expected 439 and then 489. Step 4 was ",
+              "safe because no enrollment has two measurements with the same trial ",
+              "number. When the sort key can tie, write ",
+              kbd("ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"),
+              " out in full. The editor below has both versions side by side."),
+            sql_editor("nsed7", starter = "SELECT title, year, sample_size,\n       SUM(sample_size) OVER (ORDER BY year) AS default_frame,\n       SUM(sample_size) OVER (ORDER BY year\n                              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS rows_frame\nFROM studies;", height = "150px"),
+            help_details("A centered window, and the other frame units",
+              tagList(kbd("ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING"), " takes a row and one ",
+                "neighbor on each side, the usual smoothing window. Besides ", kbd("ROWS"),
+                " (count physical rows) and ", kbd("RANGE"), " (count by value of the sort ",
+                "key), recent SQLite and PostgreSQL offer ", kbd("GROUPS"),
+                " (count sets of tied rows). ", kbd("ROWS"), " is the one to reach for ",
+                "unless you have a specific reason; it is the only one of the three whose ",
+                "behavior can be predicted without knowing whether the data has ties.")),
+            continue_button("win_continue6"),
+            id_prefix = "win-step"
+          )),
+
+          # ===== STEP 7 =====
+          conditionalPanel("output.win_step >= 7",
+          step_container(7, "Filtering on a window; NTILE, FIRST_VALUE",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "Window functions are evaluated after ", tags$code("WHERE"), ", ",
+                tags$code("GROUP BY"), ", and ", tags$code("HAVING"),
+                ", so their results cannot be referenced in those clauses. To filter on ",
+                "one, compute it in a CTE or derived table and filter in the enclosing ",
+                "query. Further window functions include ", tags$code("NTILE(n)"),
+                ", which assigns rows to ", tags$code("n"), " buckets of near-equal size, and ",
+                tags$code("FIRST_VALUE(x)"), ", which returns ", tags$code("x"),
+                " from the first row of the frame."),
+              plain = tagList(tags$b("In human words. "),
+                "“The best-paid person in each lab” is a ranking followed by a filter, ",
+                "and the filter cannot go in the same query as the ranking, because ",
+                kbd("WHERE"), " has finished before any rank exists. So: rank in a CTE, ",
+                "then select from the CTE where the rank is 1. This two-step shape, ",
+                "top-N per group, is probably the most common reason anyone writes a ",
+                "window function."),
+              lab = tagList(tags$b("Lab database. "),
+                "Seven rows, one per lab and one for the lab-less Dr. Roams, who tops a ",
+                "field of one. ", kbd("NTILE(4)"), " splits the ten disclosed salaries ",
+                "into quartiles of 3, 3, 2, and 2, and puts both grad students, to ",
+                "nobody's surprise, in the fourth.")
+            ),
+            sql_code("WITH ranked AS (\n  SELECT full_name, lab_id, salary,\n         ROW_NUMBER() OVER (PARTITION BY lab_id ORDER BY salary DESC) AS rn\n  FROM researchers\n  WHERE salary IS NOT NULL\n)\nSELECT full_name, lab_id, salary\nFROM ranked\nWHERE rn = 1;"),
+            p(style = "margin:8px 0 4px 0;", "Run it, then change ", kbd("rn = 1"), " to ",
+              kbd("rn <= 2"), " for the top two per lab:"),
+            sql_editor("nsed8", starter = "WITH ranked AS (\n  SELECT full_name, lab_id, salary,\n         ROW_NUMBER() OVER (PARTITION BY lab_id ORDER BY salary DESC) AS rn\n  FROM researchers\n  WHERE salary IS NOT NULL\n)\nSELECT full_name, lab_id, salary\nFROM ranked\nWHERE rn = 1;", height = "200px"),
+            execution_order_ribbon(
+              active = c("WINDOW"),
+              note = "Windows are computed after WHERE, GROUP BY, and HAVING, and before DISTINCT, ORDER BY, and LIMIT. Hence the CTE: by the time a rank exists, this query's WHERE is over, and only an enclosing query's WHERE can see it. Try it without the CTE and SQLite says “misuse of aliased window function rn.”"),
+            help_details("NTILE, FIRST_VALUE, and the LAST_VALUE trap",
+              tagList(
+                p(style = "margin-bottom:6px;", kbd("NTILE(4) OVER (ORDER BY salary DESC)"),
+                  " labels each row 1 to 4 by quartile. ",
+                  kbd("FIRST_VALUE(salary) OVER (PARTITION BY lab_id ORDER BY salary DESC)"),
+                  " puts the lab's top salary on every row, so ",
+                  kbd("salary - FIRST_VALUE(salary) OVER (…)"),
+                  " is each person's gap to the top of their lab (Wesley Tern's is −87000)."),
+                p(style = "margin-bottom:0;", kbd("LAST_VALUE"), " looks like the mirror image and is not. ",
+                  "Under the default frame, which ends at the current row, the “last” ",
+                  "row of the frame is the current row, so ", kbd("LAST_VALUE(x)"),
+                  " returns each row's own ", kbd("x"), ". To get the partition's true ",
+                  "last value, extend the frame: ",
+                  kbd("ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"),
+                  ", or sort the other way and use ", kbd("FIRST_VALUE"), "."))),
+            help_details("Naming a window: the WINDOW clause",
+              tagList("When several functions share one ", kbd("OVER (…)"),
+                ", define it once: ",
+                kbd("SELECT RANK() OVER w, NTILE(4) OVER w FROM researchers WINDOW w AS (ORDER BY salary DESC)"),
+                ". The ", kbd("WINDOW"), " clause goes after ", kbd("HAVING"),
+                " and before ", kbd("ORDER BY"), ". SQLite, PostgreSQL, and MySQL ",
+                "support it; SQL Server only since its 2022 release.")),
+            continue_button("win_done", "I've got window functions \u2193"),
             id_prefix = "win-step"
           )),
 
           # ===== QUEST =====
-          conditionalPanel("output.win_step >= 5",
+          conditionalPanel("output.win_step >= 7",
           quest_section(
             "Ten queries to make windows automatic",
             intro = p(style = "line-height:1.6; margin-bottom:0;",
               "These use ", kbd("OVER ()"), ", ", kbd("PARTITION BY"), ", the ",
-              "ranking functions, running totals, and ", kbd("LAG"), "/", kbd("LEAD"),
-              ". Use the exact output column names each prompt asks for. Tables: ",
+              "ranking functions, running totals, ", kbd("LAG"), "/", kbd("LEAD"),
+              ", a ", kbd("ROWS BETWEEN"), " frame, and one CTE that filters on a rank. Use the exact output column names each prompt asks for. Tables: ",
               kbd("researchers"), ", ", kbd("studies"), ", ", kbd("measurements"), "."),
             quest_editors_ui(WIN_QUEST, "winq")
           ))

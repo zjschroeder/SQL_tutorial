@@ -1,8 +1,9 @@
 # =============================================================================
 # tab_subqueries.R — "Subqueries and CTEs" walkthrough (Tab 7)
 #
-# Five gated steps (scalar subquery; subquery with IN; EXISTS / correlated; the
-# NOT IN + NULL trap; CTEs with WITH) then a 10-question quest.
+# Seven gated steps (scalar subquery; subquery with IN; EXISTS / correlated; the
+# NOT IN + NULL trap; CTEs with WITH; subqueries in FROM and in SELECT;
+# recursive CTEs) then a 10-question quest.
 # =============================================================================
 
 SUBQ_QUEST <- list(
@@ -20,10 +21,12 @@ SUBQ_QUEST <- list(
        ref = "SELECT full_name FROM researchers WHERE lab_id IN (SELECT lab_id FROM labs WHERE building = 'Wexler Hall');",
        ordered = FALSE,
        solution = "SELECT full_name\nFROM researchers\nWHERE lab_id IN (SELECT lab_id FROM labs WHERE building = 'Wexler Hall');"),
-  list(prompt = "Return the nickname of participants enrolled in at least one study. Use IN with a subquery.",
-       ref = "SELECT nickname FROM participants WHERE participant_id IN (SELECT participant_id FROM enrollments);",
+  list(prompt = paste0("Return the average number of researchers per lab, as avg_per_lab, leaving out ",
+                       "the researcher who has no lab. Count per lab in a subquery in FROM, then ",
+                       "average the counts. (An average of counts cannot be done in one level; step 6.)"),
+       ref = "SELECT AVG(n) AS avg_per_lab FROM (SELECT COUNT(*) AS n FROM researchers WHERE lab_id IS NOT NULL GROUP BY lab_id) AS per_lab;",
        ordered = FALSE,
-       solution = "SELECT nickname\nFROM participants\nWHERE participant_id IN (SELECT participant_id FROM enrollments);"),
+       solution = "SELECT AVG(n) AS avg_per_lab\nFROM (\n  SELECT COUNT(*) AS n\n  FROM researchers\n  WHERE lab_id IS NOT NULL\n  GROUP BY lab_id\n) AS per_lab;"),
   list(prompt = "Return the nickname of participants enrolled in no study. Use NOT IN. (Safe here; step 4 explains when it isn't.)",
        ref = "SELECT nickname FROM participants WHERE participant_id NOT IN (SELECT participant_id FROM enrollments);",
        ordered = FALSE,
@@ -46,11 +49,12 @@ SUBQ_QUEST <- list(
        ref = "WITH lab_counts AS (SELECT lab_id, COUNT(*) AS n FROM researchers GROUP BY lab_id) SELECT l.lab_name, c.n FROM labs l JOIN lab_counts c ON l.lab_id = c.lab_id;",
        ordered = FALSE,
        solution = "WITH lab_counts AS (\n  SELECT lab_id, COUNT(*) AS n FROM researchers GROUP BY lab_id\n)\nSELECT l.lab_name, c.n\nFROM labs l\nJOIN lab_counts c ON l.lab_id = c.lab_id;"),
-  list(prompt = paste0("Return the full_name and salary of the researcher(s) with the highest ",
-                       "salary. Use a scalar subquery."),
-       ref = "SELECT full_name, salary FROM researchers WHERE salary = (SELECT MAX(salary) FROM researchers);",
+  list(prompt = paste0("Using a recursive CTE to generate the years, return every year from 2014 to ",
+                       "2023 as year, with the number of researchers who started that year as ",
+                       "n_starts (0 for the years when nobody did)."),
+       ref = "WITH RECURSIVE years(year) AS (SELECT 2014 UNION ALL SELECT year + 1 FROM years WHERE year < 2023) SELECT years.year, COUNT(r.researcher_id) AS n_starts FROM years LEFT JOIN researchers r ON r.start_year = years.year GROUP BY years.year;",
        ordered = FALSE,
-       solution = "SELECT full_name, salary\nFROM researchers\nWHERE salary = (SELECT MAX(salary) FROM researchers);")
+       solution = "WITH RECURSIVE years(year) AS (\n  SELECT 2014\n  UNION ALL\n  SELECT year + 1 FROM years WHERE year < 2023\n)\nSELECT years.year, COUNT(r.researcher_id) AS n_starts\nFROM years\nLEFT JOIN researchers r ON r.start_year = years.year\nGROUP BY years.year;")
 )
 
 SUBQ_STEP_TITLES <- c(
@@ -58,7 +62,9 @@ SUBQ_STEP_TITLES <- c(
   "Subqueries with IN",
   "EXISTS and correlated subqueries",
   "The NOT IN + NULL trap",
-  "Readable queries with CTEs"
+  "Readable queries with CTEs",
+  "Subqueries in FROM and in SELECT",
+  "Recursive CTEs"
 )
 
 source_subqueries_server <- function(input, output, session) {
@@ -71,11 +77,13 @@ source_subqueries_server <- function(input, output, session) {
   observeEvent(input$subq_continue2, walk$step <- max(walk$step, 3))
   observeEvent(input$subq_continue3, walk$step <- max(walk$step, 4))
   observeEvent(input$subq_continue4, walk$step <- max(walk$step, 5))
+  observeEvent(input$subq_continue5, walk$step <- max(walk$step, 6))
+  observeEvent(input$subq_continue6, walk$step <- max(walk$step, 7))
 
   output$subq_toc <- renderUI(
     walkthrough_toc(walk$step, SUBQ_STEP_TITLES, "subq-step"))
 
-  wire_demo_editors("qsed", 5, input, output, session)
+  wire_demo_editors("qsed", 8, input, output, session)
   wire_quest_editors(SUBQ_QUEST, "subqq", input, output, session)
 
   output$subqueries_tab_ui <- renderUI({
@@ -254,18 +262,107 @@ source_subqueries_server <- function(input, output, session) {
               "readable alternative to a subquery nested inside a subquery nested ",
               "inside a subquery. Six months from now, the CTE version is the one ",
               "you will still understand."),
-            continue_button("subq_done", "I've got subqueries ↓"),
+            continue_button("subq_continue5"),
+            id_prefix = "subq-step"
+          )),
+
+          # ===== STEP 6 =====
+          conditionalPanel("output.subq_step >= 6",
+          step_container(6, "Subqueries in FROM and in SELECT",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "A subquery in the ", tags$code("FROM"), " clause (a ",
+                tags$em("derived table"), ") is treated as a table for the duration of ",
+                "the query, and should be given an alias. A scalar subquery may also ",
+                "appear in the select list, where, if correlated, it is evaluated once ",
+                "per output row."),
+              plain = tagList(tags$b("In human words. "),
+                "A query's result is a table, so it can stand wherever a table can, ",
+                "including after ", kbd("FROM"), ". This is the CTE of the previous step ",
+                "without the name up front, and it is how most SQL written before CTEs ",
+                "did the job, so you will meet it constantly in other people's queries. ",
+                "Its main use is a second round of aggregation on the first round's output."),
+              lab = tagList(tags$b("Lab database. "),
+                "How many researchers does a lab have, on average? ",
+                kbd("AVG(COUNT(*))"), " is an error (“misuse of aggregate”), since an ",
+                "aggregate cannot contain another. Count per lab in an inner query, then ",
+                "average those counts in the outer one: 1.83, the institute's eleven ",
+                "affiliated researchers spread over six labs.")
+            ),
+            sql_code("SELECT AVG(n) AS avg_per_lab\nFROM (\n  SELECT lab_id, COUNT(*) AS n\n  FROM researchers\n  WHERE lab_id IS NOT NULL\n  GROUP BY lab_id\n) AS per_lab;"),
+            p(style = "margin:8px 0 4px 0;", "Run it. Then delete everything except the ",
+              "inner query and run that, to see the table the outer one was averaging:"),
+            sql_editor("qsed6", starter = "SELECT AVG(n) AS avg_per_lab\nFROM (\n  SELECT lab_id, COUNT(*) AS n\n  FROM researchers\n  WHERE lab_id IS NOT NULL\n  GROUP BY lab_id\n) AS per_lab;", height = "160px"),
+            p(style = "margin:14px 0 4px 0;", "And a correlated subquery in the select ",
+              "list, which looks up one number per output row:"),
+            sql_code("SELECT l.lab_name,\n       (SELECT COUNT(*) FROM studies s WHERE s.lab_id = l.lab_id) AS n_studies\nFROM labs l;"),
+            sql_editor("qsed7", starter = "SELECT l.lab_name,\n       (SELECT COUNT(*) FROM studies s WHERE s.lab_id = l.lab_id) AS n_studies\nFROM labs l;"),
+            callout_warm(tags$b("Always alias a derived table. "),
+              "SQLite does not insist on the ", kbd("AS per_lab"), ". PostgreSQL (before ",
+              "version 16), MySQL, and SQL Server all refuse to run the query without it. ",
+              "Writing the alias costs nothing here and saves an error there."),
+            help_details("Derived table, CTE, or join?",
+              tagList("The second query could have been a ", kbd("LEFT JOIN"), " with ",
+                kbd("GROUP BY"), ", and the first could have been a CTE. They return the ",
+                "same rows, and the database will often run them the same way. My own ",
+                "habit: a CTE when the inner query is more than three lines or is used ",
+                "twice; a derived table when it is short and used once; a select-list ",
+                "subquery when I want a single extra number and do not want the join to ",
+                "multiply my rows (recall the JOINs tab, step 5).")),
+            continue_button("subq_continue6"),
+            id_prefix = "subq-step"
+          )),
+
+          # ===== STEP 7 =====
+          conditionalPanel("output.subq_step >= 7",
+          step_container(7, "Recursive CTEs",
+            explanation_triad(
+              formal = tagList(tags$b("Academic. "),
+                "A recursive CTE (", tags$code("WITH RECURSIVE"), ") has two parts joined ",
+                "by ", tags$code("UNION ALL"), ": an anchor query that supplies the ",
+                "starting rows, and a recursive query that refers to the CTE's own name ",
+                "and is re-run on the rows most recently produced until it produces no more."),
+              plain = tagList(tags$b("In human words. "),
+                "A loop, in a language that has none. Start with one row; keep deriving ",
+                "the next row from the last; stop when the ", kbd("WHERE"),
+                " says so. Its two everyday uses are generating a series (every year, ",
+                "every date, the numbers 1 to n) and walking a hierarchy (a manager's ",
+                "reports, and their reports, and so on down)."),
+              lab = tagList(tags$b("Lab database. "),
+                "How many studies did the institute run in each year from 2014 to 2023? ",
+                kbd("GROUP BY year"), " on ", kbd("studies"), " cannot report a year with ",
+                "no studies, there being no row to count. Generate the ten years, ",
+                kbd("LEFT JOIN"), " the studies to them, and 2015 appears with its zero.")
+            ),
+            sql_code("WITH RECURSIVE years(y) AS (\n  SELECT 2014                             -- the anchor: where to start\n  UNION ALL\n  SELECT y + 1 FROM years WHERE y < 2023  -- the step, and when to stop\n)\nSELECT y AS year, COUNT(s.study_id) AS n_studies\nFROM years\nLEFT JOIN studies s ON s.year = y\nGROUP BY y;"),
+            sql_editor("qsed8", starter = "WITH RECURSIVE years(y) AS (\n  SELECT 2014\n  UNION ALL\n  SELECT y + 1 FROM years WHERE y < 2023\n)\nSELECT y AS year, COUNT(s.study_id) AS n_studies\nFROM years\nLEFT JOIN studies s ON s.year = y\nGROUP BY y;", height = "200px"),
+            callout_warm(tags$b("The stopping condition is your responsibility. "),
+              "Leave off ", kbd("WHERE y < 2023"), " and the CTE counts upward for as long ",
+              "as it is allowed to, which in this browser tab means until you lose ",
+              "patience and reload the page. If you want to experiment, add a ",
+              kbd("LIMIT 50"), " to the final query first; SQLite stops the recursion ",
+              "once the limit is met."),
+            help_details("Why the zero needed all that",
+              tagList("This is the general form of a problem from the GROUP BY tab: a group ",
+                "with no rows does not exist, so it cannot be counted. The remedy is ",
+                "always the same. Get the complete list of groups from somewhere (a ",
+                "lookup table, a ", kbd("CROSS JOIN"), ", or a generated series like this ",
+                "one), put it on the left of a ", kbd("LEFT JOIN"), ", and count a column ",
+                "from the right side, so that an unmatched row counts as 0 and not as 1. ",
+                "PostgreSQL has ", kbd("generate_series()"), " for the series; elsewhere, ",
+                "this CTE is the portable way.")),
+            continue_button("subq_done", "I've got subqueries \u2193"),
             id_prefix = "subq-step"
           )),
 
           # ===== QUEST =====
-          conditionalPanel("output.subq_step >= 5",
+          conditionalPanel("output.subq_step >= 7",
           quest_section(
             "Ten queries to make subqueries automatic",
             intro = p(style = "line-height:1.6; margin-bottom:0;",
               "These use scalar subqueries, ", kbd("IN"), "/", kbd("NOT IN"), ", ",
-              kbd("EXISTS"), "/", kbd("NOT EXISTS"), ", and a ", kbd("WITH"),
-              " CTE. Tables: ", kbd("labs"), ", ", kbd("researchers"), ", ",
+              kbd("EXISTS"), "/", kbd("NOT EXISTS"), ", a subquery in ", kbd("FROM"),
+              ", a ", kbd("WITH"), " CTE, and a recursive one. Tables: ", kbd("labs"), ", ", kbd("researchers"), ", ",
               kbd("studies"), ", ", kbd("participants"), ", ", kbd("enrollments"), "."),
             quest_editors_ui(SUBQ_QUEST, "subqq")
           ))
