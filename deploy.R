@@ -32,6 +32,9 @@ if (length(missing)) {
 if (!file.exists(file.path("data", "institute.sqlite"))) {
   stop("data/institute.sqlite not found. Build it first:  Rscript data/build_db.R")
 }
+if (!file.exists(file.path("data", "district.sqlite"))) {
+  stop("data/district.sqlite not found. Build it first:  Rscript data/build_district.R")
+}
 
 # Sanity-check: confirm app.R sources cleanly before uploading.
 message("Sourcing app.R to catch errors before deploy...")

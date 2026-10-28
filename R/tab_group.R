@@ -78,6 +78,9 @@ source_group_server <- function(input, output, session) {
 
   wire_demo_editors("gsed", 6, input, output, session)
   wire_quest_editors(GROUP_QUEST, "grpq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzgrp", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(GROUP_DQUEST, "dzgrpq", input, output, session, con_fun = district_con_ro)
 
   output$group_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -315,7 +318,8 @@ source_group_server <- function(input, output, session) {
               "reads the header. Tables: ",
               kbd("researchers"), ", ", kbd("studies"), ", ", kbd("participants"), "."),
             quest_editors_ui(GROUP_QUEST, "grpq")
-          ))
+          ),
+          dsec_group())
         )
       )
     )

@@ -222,7 +222,16 @@ ui <- page_navbar(
   nav_panel(title = "Windows",         uiOutput("windows_tab_ui")),
   nav_panel(title = "Changing data",   uiOutput("changing_tab_ui")),
   nav_panel(title = "Tables",          uiOutput("tables_tab_ui")),
-  nav_panel(title = "Put it together", uiOutput("capstone_tab_ui"))
+  nav_panel(title = "Put it together", uiOutput("capstone_tab_ui")),
+  nav_menu(title = "School district",
+    nav_panel(title = "District data",         uiOutput("dd_tab_ui")),
+    nav_panel(title = "Enrollment counts",     uiOutput("den_tab_ui")),
+    nav_panel(title = "Attendance",            uiOutput("datt_tab_ui")),
+    nav_panel(title = "Discipline and groups", uiOutput("ddis_tab_ui")),
+    nav_panel(title = "Cohorts and outcomes",  uiOutput("dcoh_tab_ui")),
+    nav_panel(title = "Data quality",          uiOutput("dqa_tab_ui")),
+    nav_panel(title = "District challenges",   uiOutput("dch_tab_ui"))
+  )
 )
 
 # ============================================================================
@@ -242,6 +251,14 @@ server <- function(input, output, session) {
   if (exists("source_changing_server"))   source_changing_server(input, output, session)
   if (exists("source_tables_server"))     source_tables_server(input, output, session)
   if (exists("source_capstone_server"))   source_capstone_server(input, output, session)
+  # School district tabs
+  if (exists("source_district_data_server"))       source_district_data_server(input, output, session)
+  if (exists("source_district_enrollment_server")) source_district_enrollment_server(input, output, session)
+  if (exists("source_district_attendance_server")) source_district_attendance_server(input, output, session)
+  if (exists("source_district_discipline_server")) source_district_discipline_server(input, output, session)
+  if (exists("source_district_cohorts_server"))    source_district_cohorts_server(input, output, session)
+  if (exists("source_district_quality_server"))    source_district_quality_server(input, output, session)
+  if (exists("source_district_challenges_server")) source_district_challenges_server(input, output, session)
 }
 
 shinyApp(ui, server)

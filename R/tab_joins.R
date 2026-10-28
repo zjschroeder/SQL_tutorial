@@ -90,6 +90,9 @@ source_joins_server <- function(input, output, session) {
 
   wire_demo_editors("jsed", 8, input, output, session)
   wire_quest_editors(JOINS_QUEST, "joiq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzjoi", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(JOINS_DQUEST, "dzjoiq", input, output, session, con_fun = district_con_ro)
 
   output$joins_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -406,7 +409,8 @@ source_joins_server <- function(input, output, session) {
               kbd("enrollments.study_id→studies"), ", ",
               kbd("enrollments.participant_id→participants"), "."),
             quest_editors_ui(JOINS_QUEST, "joiq")
-          ))
+          ),
+          dsec_joins())
         )
       )
     )

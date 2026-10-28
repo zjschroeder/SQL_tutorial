@@ -136,9 +136,29 @@ KEYWORD_INDEX <- list(
   "Put it together" = c("CREATE INDEX", "EXPLAIN QUERY PLAN")
 )
 
+# The School district tabs teach ideas rather than keywords; this lists them by
+# tab, rendered under the keyword index and checked against the tab files the
+# same way (tests/verify_content.R, section 9).
+DISTRICT_TOPIC_INDEX <- list(
+  "District data"         = c("grain", "state_id", "service_type", "calendar_days", "exceptions",
+                              "T-SQL", "DECLARE", "TOP"),
+  "Enrollment counts"     = c("point-in-time", "cumulative", "COUNT(DISTINCT", "scaffold",
+                              "CROSS JOIN", "snapshot", "ADM"),
+  "Attendance"            = c("enrolled_days", "COALESCE", "attendance rate", "consistent attendance",
+                              "chronic absence", "last_present"),
+  "Discipline and groups" = c("fan-out", "unduplicated", "Two or more races", "risk ratio",
+                              "risk difference", "suppression"),
+  "Cohorts and outcomes"  = c("cohort", "ROW_NUMBER", "documented_transfer",
+                              "adjusted cohort graduation rate", "on track", "denominator", "Matched"),
+  "Data quality"          = c("self-join", "LEAD", "GROUP_CONCAT", "anti-join", "EXCEPT",
+                              "exception report", "user_access", "SUSER_SNAME"),
+  "District challenges"   = c("As of when", "grain", "odbc", "Trusted_Connection")
+)
+
 source_capstone_server <- function(input, output, session) {
 
   wire_quest_editors(CAPSTONE_QUEST, "capq", input, output, session)
+  wire_quest_editors(CAPSTONE_DQUEST, "dzcapq", input, output, session, con_fun = district_con_ro)
 
   # Free sandbox + the EXPLAIN demo (both read-only).
   sql_editor_server("sandbox", input, output, session, con_fun = institute_con_ro)
@@ -173,6 +193,9 @@ source_capstone_server <- function(input, output, session) {
         quest_editors_ui(CAPSTONE_QUEST, "capq")
       ),
 
+      # ---- In a school district ----
+      dsec_capstone(),
+
       # ---- Free sandbox ----
       div(class = "mt-5 mb-3",
         h3("Free sandbox", style = "margin-bottom:6px;"),
@@ -199,7 +222,13 @@ source_capstone_server <- function(input, output, session) {
           "you are looking for one that is not, the section after this one may say why."),
         term_table(head = c("Tab", "Teaches"),
           rows = lapply(names(KEYWORD_INDEX), function(tab)
-            c(tab, paste(KEYWORD_INDEX[[tab]], collapse = "  \u00b7  "))))
+            c(tab, paste(KEYWORD_INDEX[[tab]], collapse = "  \u00b7  ")))),
+        p(style = "line-height:1.6; max-width:820px; margin-top:12px;",
+          "The School district tabs teach ideas about data more than new keywords. Their ",
+          "topics, by tab:"),
+        term_table(head = c("District tab", "Topics"),
+          rows = lapply(names(DISTRICT_TOPIC_INDEX), function(tab)
+            c(tab, paste(DISTRICT_TOPIC_INDEX[[tab]], collapse = "  \u00b7  "))))
       ),
 
       # ---- Other dialects ----

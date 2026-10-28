@@ -98,6 +98,9 @@ source_select_server <- function(input, output, session) {
 
   # Wire the in-step "try it" editors (Run only).
   wire_demo_editors("seled", 5, input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzsel", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(SELECT_DQUEST, "dzselq", input, output, session, con_fun = district_con_ro)
 
   # Wire the 10 quest editors. Each computes its expected set by running its
   # reference query against the read-only DB.
@@ -325,7 +328,8 @@ source_select_server <- function(input, output, session) {
               sql_editor(paste0("selq", i), prompt = q$prompt,
                          starter = "", graded = TRUE, number = i)
             })
-          ))
+          ),
+          dsec_select())
         )
       )
     )

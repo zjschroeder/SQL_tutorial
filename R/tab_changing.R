@@ -104,6 +104,20 @@ source_changing_server <- function(input, output, session) {
 
   # ---- Wire the 10 graded tasks (post-state verification) -----------------
   wire_crud_quest(CRUD_QUEST, "crudq", input, output, session, con_holder)
+  # The "In a school district" section (R/district_sections.R) runs on a
+  # separate private copy of the district database, shared by both writing tabs.
+  dscratch <- district_scratch_holder(session)
+  observeEvent(input$dchg_reset, {
+    dscratch$reset()
+    output$dchg_reset_msg <- renderUI(div(style = "color:#0F6E56; font-size:12.5px; margin-top:4px;",
+                                          "District copy reset."))
+  })
+  sql_editor_server_crud("dzchg1", input, output, session, con_holder = dscratch$get)
+  sql_editor_server_crud("dzchg2", input, output, session, con_holder = dscratch$get)
+  sql_editor_server_crud("dzchg3", input, output, session, con_holder = dscratch$get)
+  sql_editor_server_crud("dzchg4", input, output, session, con_holder = dscratch$get)
+  wire_crud_quest(CHANGING_DTASKS, "dzchgq", input, output, session, dscratch$get,
+                  scratch_fun = district_con_scratch)
 
   output$changing_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -393,7 +407,8 @@ source_changing_server <- function(input, output, session) {
               "but if things get tangled, ", tags$b("Reset my copy"), " above puts ",
               "everything back."),
             quest_editors_ui(CRUD_QUEST, "crudq")
-          ))
+          ),
+          dsec_changing())
         )
       )
     )

@@ -191,6 +191,9 @@ source_start_server <- function(input, output, session) {
                  "studies &nbsp;∞───∞&nbsp; participants &nbsp;&nbsp;(via enrollments)<br>",
                  "enrollments &nbsp;1───∞&nbsp; measurements"))),
 
+      # ---- The district (second database) ----
+      dsec_start(),
+
       # ---- Routing grid ----
       h3("Where to go", style = "margin:8px 0 12px 0;"),
       div(class = "row g-3 mb-4",
@@ -206,6 +209,16 @@ source_start_server <- function(input, output, session) {
         start_route("Changing data", "INSERT, UPDATE, DELETE, and transactions, on your own disposable copy."),
         start_route("Tables",        "CREATE TABLE, types, constraints, keys, ALTER, DROP, and views."),
         start_route("Put it together","20 mixed challenges, a free sandbox, a keyword index, and a short note on speed.")
+      ),
+      h4("School district", style = "margin:8px 0 12px 0; color:#0B5A45;"),
+      div(class = "row g-3 mb-4",
+        start_route("District data",         "The tour: how a student information system looks from SQL, and SQLite next to SQL Server."),
+        start_route("Enrollment counts",     "Who was here on October 1, over a year, in a frozen snapshot, and for funding (ADM)."),
+        start_route("Attendance",            "From absence records to attendance rates, consistent attendance, and chronic absence."),
+        start_route("Discipline and groups", "Incidents, students, and consequences; race and ethnicity rules; risk ratios; suppression."),
+        start_route("Cohorts and outcomes",  "Graduation cohorts, the four-year rate, credits on track, and test results."),
+        start_route("Data quality",          "Overlaps, gaps, duplicates, bad codes, and reconciling with the state's file."),
+        start_route("District challenges",   "Fifteen requests as they arrive, a district sandbox, and interview scenarios.")
       ),
 
       div(style = "text-align:center; color:#6b7c85; font-size:13px; padding:8px 0 24px 0;",

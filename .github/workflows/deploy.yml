@@ -47,9 +47,7 @@ jobs:
             shinylive
 
       - name: Export the app to docs/
-        run: |
-          Rscript -e 'shinylive::export(appdir = ".", destdir = "docs", quiet = FALSE)'
-          touch docs/.nojekyll
+                run: Rscript shinylive_export.R
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -24,11 +24,14 @@ message("shinylive version: ", as.character(packageVersion("shinylive")))
 if (!file.exists(file.path("data", "institute.sqlite"))) {
   stop("data/institute.sqlite not found. Build it first:  Rscript data/build_db.R")
 }
+if (!file.exists(file.path("data", "district.sqlite"))) {
+  stop("data/district.sqlite not found. Build it first:  Rscript data/build_district.R")
+}
 
 # Stage only the app's own files into a temp dir, so the export bundle never
 # picks up the bundled reference app (Example app/), a previous docs/ build,
-# RStudio cruft, or the build-time-only data (frozen CSVs, build_db.R). Only
-# institute.sqlite is needed at runtime.
+# RStudio cruft, or the build-time-only data (frozen CSVs, the build and
+# generate scripts). Only the two .sqlite files are needed at runtime.
 stage <- file.path(tempdir(), "sqlapp_stage")
 unlink(stage, recursive = TRUE, force = TRUE)
 dir.create(stage)
@@ -36,6 +39,7 @@ dir.create(file.path(stage, "data"))
 file.copy("app.R", stage)
 file.copy("R", stage, recursive = TRUE)
 file.copy(file.path("data", "institute.sqlite"), file.path(stage, "data"))
+file.copy(file.path("data", "district.sqlite"),  file.path(stage, "data"))
 message("Staged app for export:\n  ", paste(list.files(stage, recursive = TRUE), collapse = "\n  "))
 
 # Clean any previous build so we don't ship stale assets.

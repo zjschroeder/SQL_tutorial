@@ -1,0 +1,10 @@
+"school_id","school_name","school_type","grade_low","grade_high","state_school_number","opened_year"
+10,"Birchwood Elementary","Elementary","KG","05","010",1958
+20,"Cedar Park Elementary","Elementary","KG","05","020",1964
+30,"Riverbend Elementary","Elementary","KG","05","030",1971
+40,"Prairie View Elementary","Elementary","KG","05","040",2003
+50,"Linden Middle School","Middle","06","08","050",1966
+60,"Oak Grove Middle School","Middle","06","08","060",1998
+70,"Lakeview High School","High","09","12","070",1924
+80,"Riverside High School","High","09","12","080",1969
+90,"Horizon Area Learning Center","Alternative","09","12","090",2011

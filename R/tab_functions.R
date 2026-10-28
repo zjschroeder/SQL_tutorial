@@ -88,6 +88,9 @@ source_functions_server <- function(input, output, session) {
 
   wire_demo_editors("fsed", 6, input, output, session)
   wire_quest_editors(FUNC_QUEST, "funq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzfun", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(FUNC_DQUEST, "dzfunq", input, output, session, con_fun = district_con_ro)
 
   output$functions_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -396,7 +399,8 @@ source_functions_server <- function(input, output, session) {
               "exact output column names each prompt asks for. Tables: ", kbd("labs"),
               ", ", kbd("researchers"), ", ", kbd("studies"), ", ", kbd("participants"), "."),
             quest_editors_ui(FUNC_QUEST, "funq")
-          ))
+          ),
+          dsec_functions())
         )
       )
     )

@@ -94,6 +94,9 @@ source_windows_server <- function(input, output, session) {
 
   wire_demo_editors("nsed", 8, input, output, session)
   wire_quest_editors(WIN_QUEST, "winq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzwin", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(WIN_DQUEST, "dzwinq", input, output, session, con_fun = district_con_ro)
 
   output$windows_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -388,7 +391,8 @@ source_windows_server <- function(input, output, session) {
               ", a ", kbd("ROWS BETWEEN"), " frame, and one CTE that filters on a rank. Use the exact output column names each prompt asks for. Tables: ",
               kbd("researchers"), ", ", kbd("studies"), ", ", kbd("measurements"), "."),
             quest_editors_ui(WIN_QUEST, "winq")
-          ))
+          ),
+          dsec_windows())
         )
       )
     )

@@ -109,6 +109,13 @@ source_tables_server <- function(input, output, session) {
   }
 
   wire_crud_quest(TABLES_QUEST, "tabq", input, output, session, con_holder)
+  # The "In a school district" section (R/district_sections.R) runs on a
+  # separate private copy of the district database, shared by both writing tabs.
+  dscratch <- district_scratch_holder(session)
+  sql_editor_server_crud("dztab1", input, output, session, con_holder = dscratch$get)
+  sql_editor_server_crud("dztab2", input, output, session, con_holder = dscratch$get)
+  wire_crud_quest(TABLES_DTASKS, "dztabq", input, output, session, dscratch$get,
+                  scratch_fun = district_con_scratch)
 
   output$tables_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -436,7 +443,8 @@ source_tables_server <- function(input, output, session) {
               "table already exists, an earlier attempt is still there: ",
               tags$b("Reset my copy"), " clears it (along with everything else)."),
             quest_editors_ui(TABLES_QUEST, "tabq")
-          ))
+          ),
+          dsec_tables())
         )
       )
     )

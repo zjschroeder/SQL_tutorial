@@ -1,0 +1,72 @@
+"staff_id","last_name","first_name","school_id","role","subject_area"
+7001,"Carter","Abigail",10,"Principal",
+7002,"Wilson","Eh",20,"Principal",
+7003,"Edwards","Ingrid",30,"Principal",
+7004,"Pham","Jose",40,"Principal",
+7005,"Watson","Zoe",50,"Principal",
+7006,"Young","Owen",60,"Principal",
+7007,"Halvorson","Isabella",70,"Principal",
+7008,"Htoo","Mariana",80,"Principal",
+7009,"Miller","Fue",90,"Principal",
+7010,"Gonzalez","Meron",10,"Counselor",
+7011,"Green","Anh",20,"Counselor",
+7012,"Martin","Nora",30,"Counselor",
+7013,"Scott","Ahmed",40,"Counselor",
+7014,"Evans","Henrik",50,"Counselor",
+7015,"Jensen","Camila",60,"Counselor",
+7016,"Flores","Meron",70,"Counselor",
+7017,"Le","Hawa",80,"Counselor",
+7018,"Sanders","Valeria",90,"Counselor",
+7019,"Parker","Oliver",70,"Teacher","English"
+7020,"Young","Darius",70,"Teacher","English"
+7021,"Novak","Naw",70,"Teacher","English"
+7022,"Vang","Miguel",70,"Teacher","English"
+7023,"Wilson","Yonas",70,"Teacher","Mathematics"
+7024,"Hanson","Mia",70,"Teacher","Mathematics"
+7025,"Moo","Omar",70,"Teacher","Mathematics"
+7026,"Jourdain","Kele",70,"Teacher","Mathematics"
+7027,"Howard","Chloe",70,"Teacher","Science"
+7028,"Fairbanks","Duc",70,"Teacher","Science"
+7029,"Wilson","Sofia",70,"Teacher","Science"
+7030,"Richardson","Carlos",70,"Teacher","Social Studies"
+7031,"Ramirez","Jayden",70,"Teacher","Social Studies"
+7032,"Fineday","Hodan",70,"Teacher","Social Studies"
+7033,"Turner","Fatima",70,"Teacher","World Languages"
+7034,"Robinson","Chloe",70,"Teacher","World Languages"
+7035,"Bellanger","Rowan",70,"Teacher","Health and PE"
+7036,"Johnson","Minh",70,"Teacher","Health and PE"
+7037,"Rogers","Hodan",70,"Teacher","Fine Arts"
+7038,"Sorensen","Maya",70,"Teacher","Fine Arts"
+7039,"Desta","Freya",70,"Teacher","Computer Science"
+7040,"Lee","Mateo",70,"Teacher","Career and Technical Education"
+7041,"Mitchell","Imani",70,"Teacher","Career and Technical Education"
+7042,"Kowalski","Diego",80,"Teacher","English"
+7043,"Fairbanks","Tala",80,"Teacher","English"
+7044,"White","Ella",80,"Teacher","English"
+7045,"Fineday","Nevaeh",80,"Teacher","English"
+7046,"Kebede","Amina",80,"Teacher","Mathematics"
+7047,"Bailey","Noah",80,"Teacher","Mathematics"
+7048,"Lor","Silas",80,"Teacher","Mathematics"
+7049,"Thompson","Paj",80,"Teacher","Mathematics"
+7050,"Baker","Paj",80,"Teacher","Science"
+7051,"Hernandez","Tou",80,"Teacher","Science"
+7052,"Ramirez","Ella",80,"Teacher","Science"
+7053,"Turner","Eh",80,"Teacher","Social Studies"
+7054,"Tadesse","Silas",80,"Teacher","Social Studies"
+7055,"Larson","Miguel",80,"Teacher","Social Studies"
+7056,"Paw","Jayden",80,"Teacher","World Languages"
+7057,"Adams","Anders",80,"Teacher","World Languages"
+7058,"Brown","Xavier",80,"Teacher","Health and PE"
+7059,"Flores","Freya",80,"Teacher","Health and PE"
+7060,"Walker","Isabella",80,"Teacher","Fine Arts"
+7061,"Turner","Ahmed",80,"Teacher","Fine Arts"
+7062,"Begay","Jose",80,"Teacher","Computer Science"
+7063,"Lopez","Micah",80,"Teacher","Career and Technical Education"
+7064,"Whitebird","Ruth",80,"Teacher","Career and Technical Education"
+7065,"Ahmed","Aiyana",90,"Teacher","English"
+7066,"Williams","Zainab",90,"Teacher","Mathematics"
+7067,"Evans","Brielle",90,"Teacher","Science"
+7068,"Miller","Ella",90,"Teacher","Social Studies"
+7069,"Kaw","Ella",90,"Teacher","Health and PE"
+7070,"Smith","Diego",90,"Teacher","Fine Arts"
+7071,"Bergstrom","Bao",90,"Teacher","Career and Technical Education"

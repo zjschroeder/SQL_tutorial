@@ -70,6 +70,9 @@ source_where_server <- function(input, output, session) {
 
   wire_demo_editors("wsed", 5, input, output, session)
   wire_quest_editors(WHERE_QUEST, "wherq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzwhe", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(WHERE_DQUEST, "dzwheq", input, output, session, con_fun = district_con_ro)
 
   output$where_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -308,7 +311,8 @@ source_where_server <- function(input, output, session) {
               ", ", kbd("LIKE"), ", or ", kbd("IS NULL"), ". Tables: ", kbd("labs"),
               ", ", kbd("researchers"), ", ", kbd("studies"), ", ", kbd("participants"), "."),
             quest_editors_ui(WHERE_QUEST, "wherq")
-          ))
+          ),
+          dsec_where())
         )
       )
     )

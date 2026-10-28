@@ -33,6 +33,16 @@ institute_con_ro <- function() {
   dbConnect(RSQLite::SQLite(), DB_PATH, flags = RSQLite::SQLITE_RO)
 }
 
+# The second database: Prairie Lakes Public Schools, a fictional district whose
+# tables follow the shape of a real student information system. Used by the
+# "In a school district" sections of the query tabs and by the District tabs.
+# Built by data/build_district.R.
+DISTRICT_DB_PATH <- "data/district.sqlite"
+
+district_con_ro <- function() {
+  dbConnect(RSQLite::SQLite(), DISTRICT_DB_PATH, flags = RSQLite::SQLITE_RO)
+}
+
 # For the writing tabs (Changing data, Tables): a private, disposable in-memory
 # copy seeded from the file, so a session can INSERT/UPDATE/DELETE/CREATE freely
 # and reset at will.
@@ -46,8 +56,8 @@ institute_con_ro <- function() {
 # Foreign-key enforcement is set OFF explicitly. That is SQLite's documented
 # default, but builds differ, and the Tables tab teaches switching it on, so the
 # starting state has to be the same everywhere.
-institute_con_scratch <- function() {
-  src <- institute_con_ro()
+db_con_scratch <- function(con_fun) {
+  src <- con_fun()
   on.exit(dbDisconnect(src), add = TRUE)
   dst <- dbConnect(RSQLite::SQLite(), ":memory:")
   dbExecute(dst, "PRAGMA foreign_keys = OFF;")
@@ -62,6 +72,11 @@ institute_con_scratch <- function() {
     if (nrow(df) > 0) dbAppendTable(dst, tabs$name[i], df)
   }
   for (i in seq_len(nrow(rest))) dbExecute(dst, rest$sql[i])   # indexes, views
+  dst
+}
+
+institute_con_scratch <- function() {
+  dst <- db_con_scratch(institute_con_ro)
   # One table the shipped database does not have: a stale partial backup, so the
   # Tables tab has something that can be DROPped without breaking anything.
   dbExecute(dst, paste(
@@ -71,32 +86,42 @@ institute_con_scratch <- function() {
   dst
 }
 
+# The district's private copy, for the district tasks on the two writing tabs.
+# Same construction (schema-preserving, foreign keys OFF); no extra tables.
+district_con_scratch <- function() db_con_scratch(district_con_ro)
+
 # One scratch connection per browser session, shared by every writing tab, so a
 # table created on the Tables tab is still there on the Changing-data tab and a
 # Reset on either tab resets both. Lives in session$userData.
-scratch_holder <- function(session) {
+# `key` names the holder in session$userData; `maker` builds a fresh copy. The
+# institute copy and the district copy are separate holders, each with its own
+# Reset, shared between the two writing tabs.
+scratch_holder <- function(session, key = "scratch_env", maker = institute_con_scratch) {
   ud <- session$userData
-  if (is.null(ud$scratch_env)) {
+  if (is.null(ud[[key]])) {
     env <- new.env(parent = emptyenv())
     env$con <- NULL
-    ud$scratch_env <- env
+    ud[[key]] <- env
     session$onSessionEnded(function() {
       if (!is.null(env$con) && dbIsValid(env$con)) dbDisconnect(env$con)
     })
   }
-  env <- ud$scratch_env
+  env <- ud[[key]]
   list(
     get = function() {
-      if (is.null(env$con) || !dbIsValid(env$con)) env$con <- institute_con_scratch()
+      if (is.null(env$con) || !dbIsValid(env$con)) env$con <- maker()
       env$con
     },
     reset = function() {
       if (!is.null(env$con) && dbIsValid(env$con)) dbDisconnect(env$con)
-      env$con <- institute_con_scratch()
+      env$con <- maker()
       invisible(env$con)
     }
   )
 }
+
+district_scratch_holder <- function(session)
+  scratch_holder(session, key = "district_scratch_env", maker = district_con_scratch)
 
 # ---- run_query: execute and never crash the app ----------------------------
 # Returns list(ok = TRUE, data = <df>), list(ok = TRUE, data = NULL, verb = ...,
@@ -181,7 +206,7 @@ friendly_sql_error <- function(msg) {
   hint <- if (grepl("no such column", m)) {
     "SQLite does not recognize one of your column names. Check the spelling, and check that the column lives in a table you actually named in FROM; the second is the more common mistake."
   } else if (grepl("no such table", m)) {
-    "SQLite does not recognize one of your table names. The institute's six tables are labs, researchers, studies, participants, enrollments, and measurements, all plural. (On the writing tabs, a table you created is gone after a Reset.)"
+    "SQLite does not recognize one of your table names. The institute's six tables are labs, researchers, studies, participants, enrollments, and measurements, all plural. The district's tables (students, enrollments, attendance, calendar_days, and the rest) are listed on the District data tab, and each editor works on one database or the other, never both: check which one this editor uses. (On the writing tabs, a table you created is gone after a Reset.)"
   } else if (grepl("ambiguous column name", m)) {
     "Two of the joined tables share that column name, so SQLite cannot tell which one you mean. Qualify it: studies.lab_id rather than lab_id."
   } else if (grepl("misuse of aggregate", m)) {
@@ -315,6 +340,17 @@ sql_editor_server <- function(id, input, output, session, con_fun,
   ns_id <- function(suffix) paste0(id, "_", suffix)
   store <- reactiveValues(last = NULL, verdict = NULL)
 
+  # `expected` may be a data frame or a function returning one. A function is
+  # called on the first Check and its result kept, so a tab with many graded
+  # questions does not run every reference query when the app starts (some of
+  # the district references scan the whole attendance table).
+  expected_cache <- NULL
+  get_expected <- function() {
+    if (!is.function(expected)) return(expected)
+    if (is.null(expected_cache)) expected_cache <<- expected()
+    expected_cache
+  }
+
   render_table <- function(res) render_result_block(res)
 
   observeEvent(input[[ns_id("run")]], {
@@ -333,7 +369,7 @@ sql_editor_server <- function(id, input, output, session, con_fun,
     if (!res$ok) {
       store$verdict <- list(pass = FALSE, msg = "There is an error above to fix first; then check again.")
     } else {
-      store$verdict <- check_answer(res$data, expected, ordered = ordered)
+      store$verdict <- check_answer(res$data, get_expected(), ordered = ordered)
     }
     output[[ns_id("verdict")]] <- renderUI({
       v <- store$verdict
@@ -494,7 +530,7 @@ SCHEMA <- list(
     rel  = "Each row is one trial of one enrollment.")
 )
 
-schema_explorer <- function() {
+schema_explorer <- function(schema = SCHEMA) {
   card <- function(name, info) {
     div(class = "col-md-6 col-lg-4 mb-3",
       div(style = "background:#fff; border:1px solid #d8e3e8; border-radius:10px; padding:14px 16px; height:100%;",
@@ -509,7 +545,7 @@ schema_explorer <- function() {
       ))
   }
   div(class = "row g-3",
-      Map(card, names(SCHEMA), SCHEMA))
+      Map(card, names(schema), schema))
 }
 
 # ---- Walkthrough scaffolding shared by every query tab ----------------------
@@ -550,23 +586,26 @@ quest_editors_ui <- function(quest, prefix) {
 # that fails (say, on a SQLite build too old for the syntax) must not take the
 # whole app down at startup, so it yields NULL and that one question reports
 # that it cannot be graded here.
-quest_expected <- function(ref) {
-  con0 <- institute_con_ro()
+quest_expected <- function(ref, con_fun = institute_con_ro) {
+  con0 <- con_fun()
   on.exit(dbDisconnect(con0), add = TRUE)
   tryCatch(dbGetQuery(con0, ref), error = function(e) NULL)
 }
 
 # Wire every graded editor in a quest: compute each expected result set by
 # running its reference query against the read-only DB, then attach the server.
-wire_quest_editors <- function(quest, prefix, input, output, session) {
+# The expected result is computed lazily, on the first Check (see
+# sql_editor_server()). `con_fun` picks the database: institute_con_ro (the
+# default) or district_con_ro.
+wire_quest_editors <- function(quest, prefix, input, output, session,
+                               con_fun = institute_con_ro) {
   for (i in seq_along(quest)) {
     local({
       idx <- i
       q   <- quest[[idx]]
-      expected <- quest_expected(q$ref)
       sql_editor_server(
         id = paste0(prefix, idx), input = input, output = output, session = session,
-        con_fun = institute_con_ro, expected = expected,
+        con_fun = con_fun, expected = function() quest_expected(q$ref, con_fun),
         ordered = isTRUE(q$ordered), solution = q$solution)
     })
   }
@@ -574,12 +613,13 @@ wire_quest_editors <- function(quest, prefix, input, output, session) {
 
 # Wire the ungraded in-step "try it" editors (Run only, read-only). `prefix` +
 # 1..n must match the sql_editor() ids used in the steps (e.g. "wsed", 5).
-wire_demo_editors <- function(prefix, n, input, output, session) {
+wire_demo_editors <- function(prefix, n, input, output, session,
+                              con_fun = institute_con_ro) {
   for (i in seq_len(n)) {
     local({
       eid <- paste0(prefix, i)
       sql_editor_server(id = eid, input = input, output = output, session = session,
-                        con_fun = institute_con_ro)
+                        con_fun = con_fun)
     })
   }
 }
@@ -626,6 +666,12 @@ render_result_block <- function(res) {
 sql_editor_server_crud <- function(id, input, output, session, con_holder,
                                    verify = NULL, expected = NULL, solution = NULL) {
   ns_id <- function(s) paste0(id, "_", s)
+  expected_cache <- NULL
+  get_expected <- function() {
+    if (!is.function(expected)) return(expected)
+    if (is.null(expected_cache)) expected_cache <<- expected()
+    expected_cache
+  }
 
   observeEvent(input[[ns_id("run")]], {
     con <- con_holder()
@@ -637,7 +683,7 @@ sql_editor_server_crud <- function(id, input, output, session, con_holder,
     observeEvent(input[[ns_id("check")]], {
       con <- con_holder()
       got <- tryCatch(dbGetQuery(con, verify), error = function(e) NULL)
-      v <- check_answer(got, expected, ordered = FALSE)
+      v <- check_answer(got, get_expected(), ordered = FALSE)
       # check_answer()'s wording is about a query's result; here we inspected
       # the state of the copy, so say that instead.
       v$msg <- if (isTRUE(v$pass)) {
@@ -665,19 +711,22 @@ sql_editor_server_crud <- function(id, input, output, session, con_holder,
 }
 
 # Wire the graded tasks of a writing tab. Each task's expected post-state is
-# computed once, at startup, by applying its `solution` to a fresh scratch copy
-# and running its `verify` query there.
-wire_crud_quest <- function(quest, prefix, input, output, session, con_holder) {
+# computed on its first Check, by applying its `solution` to a fresh scratch
+# copy (made by `scratch_fun`) and running its `verify` query there.
+wire_crud_quest <- function(quest, prefix, input, output, session, con_holder,
+                            scratch_fun = institute_con_scratch) {
   for (i in seq_along(quest)) {
     local({
       idx <- i
       q   <- quest[[idx]]
-      con_tmp <- institute_con_scratch()
-      expected <- tryCatch({
-        dbExecute(con_tmp, q$solution)
-        dbGetQuery(con_tmp, q$verify)
-      }, error = function(e) NULL)
-      dbDisconnect(con_tmp)
+      expected <- function() {
+        con_tmp <- scratch_fun()
+        on.exit(dbDisconnect(con_tmp), add = TRUE)
+        tryCatch({
+          dbExecute(con_tmp, q$solution)
+          dbGetQuery(con_tmp, q$verify)
+        }, error = function(e) NULL)
+      }
       sql_editor_server_crud(
         id = paste0(prefix, idx), input = input, output = output, session = session,
         con_holder = con_holder, verify = q$verify,

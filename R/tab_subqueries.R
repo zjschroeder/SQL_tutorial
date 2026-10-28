@@ -85,6 +85,9 @@ source_subqueries_server <- function(input, output, session) {
 
   wire_demo_editors("qsed", 8, input, output, session)
   wire_quest_editors(SUBQ_QUEST, "subqq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzsub", 2, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(SUBQ_DQUEST, "dzsubq", input, output, session, con_fun = district_con_ro)
 
   output$subqueries_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -365,7 +368,8 @@ source_subqueries_server <- function(input, output, session) {
               ", a ", kbd("WITH"), " CTE, and a recursive one. Tables: ", kbd("labs"), ", ", kbd("researchers"), ", ",
               kbd("studies"), ", ", kbd("participants"), ", ", kbd("enrollments"), "."),
             quest_editors_ui(SUBQ_QUEST, "subqq")
-          ))
+          ),
+          dsec_subqueries())
         )
       )
     )

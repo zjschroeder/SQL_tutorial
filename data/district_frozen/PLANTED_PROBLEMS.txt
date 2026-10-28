@@ -1,0 +1,19 @@
+overlap: student 101965
+overlap: student 101925
+overlap: student 100932
+overlap: student 100477
+gap: student 102255
+gap: student 100694
+gap: student 102161
+ghost: student 100283
+ghost: student 101461
+ghost: student 100726
+ghost: student 102274
+no end_status: enrollment row 4855,3423,3763,5116
+grade '9': student 100689
+end before start: student 101501
+duplicate person: 101783 -> 102341
+duplicate person: 100476 -> 102342
+no state_id: 102328,102302
+open roster after withdrawal: 100589,100765,100892
+state rejected (other district): 101523

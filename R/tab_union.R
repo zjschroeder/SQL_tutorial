@@ -87,6 +87,9 @@ source_union_server <- function(input, output, session) {
 
   wire_demo_editors("used", 5, input, output, session)
   wire_quest_editors(UNION_QUEST, "uniq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzuni", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(UNION_DQUEST, "dzuniq", input, output, session, con_fun = district_con_ro)
 
   output$union_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -316,7 +319,8 @@ source_union_server <- function(input, output, session) {
               kbd("researchers"), ", ", kbd("studies"), ", ", kbd("participants"), ", ",
               kbd("enrollments"), "."),
             quest_editors_ui(UNION_QUEST, "uniq")
-          ))
+          ),
+          dsec_union())
         )
       )
     )

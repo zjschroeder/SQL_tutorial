@@ -1,0 +1,622 @@
+# =============================================================================
+# district_sections.R — the "In a school district" section that closes each
+# query tab, plus its graded district quest
+#
+# Each tab file places its section after its own quest (one line in the UI)
+# and wires the editors (two lines in the server). Everything else lives here:
+# the section's text, demo SQL, T-SQL note, interview note, and quest.
+#
+# Ids: demo editors "dz<tab>1..n", quest editors "dz<tab>q1..n". Quest lists
+# end in _DQUEST (read-only) or _DTASKS (writing, on the district scratch copy).
+# Numbers quoted here are checked by tests/district_claims.R.
+# =============================================================================
+
+# ---- SELECT -----------------------------------------------------------------
+SELECT_DQUEST <- list(
+  list(prompt = "Return school_name, school_type, grade_low, and grade_high for every school.",
+       ref = "SELECT school_name, school_type, grade_low, grade_high FROM schools;",
+       solution = "SELECT school_name, school_type, grade_low, grade_high\nFROM schools;"),
+  list(prompt = "Which home languages appear in the students table? One row per language: home_language.",
+       ref = "SELECT DISTINCT home_language FROM students;",
+       solution = "SELECT DISTINCT home_language\nFROM students;"),
+  list(prompt = "Which grade codes appear in enrollments? One row per code: grade.",
+       ref = "SELECT DISTINCT grade FROM enrollments;",
+       solution = "SELECT DISTINCT grade\nFROM enrollments;"),
+  list(prompt = paste0("From courses, return course_id, course_name, and credits_per_year, which is ",
+                       "credits_per_term times 2."),
+       ref = "SELECT course_id, course_name, credits_per_term * 2 AS credits_per_year FROM courses;",
+       solution = "SELECT course_id, course_name,\n       credits_per_term * 2 AS credits_per_year\nFROM courses;"),
+  list(prompt = paste0("One row per school year in enrollments, with a label: return school_year and ",
+                       "year_label, where 2026 becomes '2025-26'. Hint: (school_year - 1) || '-' || ",
+                       "substr(school_year, 3)."),
+       ref = "SELECT DISTINCT school_year, (school_year - 1) || '-' || substr(school_year, 3) AS year_label FROM enrollments;",
+       solution = "SELECT DISTINCT school_year,\n       (school_year - 1) || '-' || substr(school_year, 3) AS year_label\nFROM enrollments;")
+)
+
+dsec_select <- function() district_section(
+  "Choosing columns from a student information system",
+  p(style = "line-height:1.6;",
+    "The district database (Prairie Lakes Public Schools, fictional, described on the ",
+    tags$b("District data"), " tab) has tables much wider than the institute's: ",
+    kbd("students"), " alone has fourteen columns, several of them about a child's identity. ",
+    "On district data, ", kbd("SELECT"), " is also a privacy decision. Name the columns the ",
+    "question needs and no others."),
+  dsql_code("SELECT student_id, grade, school_id\nFROM enrollments;"),
+  dsql_editor("dzsel1", "SELECT DISTINCT grade\nFROM enrollments;"),
+  p(style = "line-height:1.6;",
+    "Run the ", kbd("DISTINCT grade"), " query in the editor and look closely: one row says ",
+    kbd("'9'"), " where every other grade has two digits. A ", kbd("DISTINCT"), " list of a ",
+    "code column is the quickest data-quality check there is; a typo in 1 row out of 7,000 ",
+    "shows up as a row of its own."),
+  tsql_note("SELECT DISTINCT school_year,\n       CONCAT(school_year - 1, '-', RIGHT(CAST(school_year AS varchar(4)), 2)) AS year_label\nFROM enrollments;",
+    "SQLite joins text with ", kbd("||"), " and accepts a number where text is expected. ",
+    "SQL Server's ", kbd("+"), " adds numbers and joins strings, and mixing them is an error; ",
+    kbd("CONCAT"), " converts for you."),
+  interview_note(p(style = "margin-bottom:0;",
+    "“Why not ", kbd("SELECT *"), "?” Three answers: a report that names its columns ",
+    "keeps working when someone adds a column to the table; it moves less data; and on student ",
+    "data it does not carry birth dates and race fields into a file that did not need them. The ",
+    "third answer is the one a district wants to hear.")),
+  district_quest(SELECT_DQUEST, "dzselq", "Five SELECTs on the district")
+)
+
+# ---- WHERE ------------------------------------------------------------------
+WHERE_DQUEST <- list(
+  list(prompt = paste0("Open primary enrollments at Riverside High School (school_id 80) this year ",
+                       "(school_year 2026): return enrollment_id, student_id, grade."),
+       ref = "SELECT enrollment_id, student_id, grade FROM enrollments WHERE school_id = 80 AND school_year = 2026 AND service_type = 'P' AND end_date IS NULL;",
+       solution = "SELECT enrollment_id, student_id, grade\nFROM enrollments\nWHERE school_id = 80\n  AND school_year = 2026\n  AND service_type = 'P'\n  AND end_date IS NULL;"),
+  list(prompt = paste0("Attendance rows on 2026-02-10 that count as absences: status 'A' or 'H', and excuse ",
+                       "not 'X'. Return attendance_id, student_id, status."),
+       ref = "SELECT attendance_id, student_id, status FROM attendance WHERE att_date = '2026-02-10' AND status IN ('A', 'H') AND excuse <> 'X';",
+       solution = "SELECT attendance_id, student_id, status\nFROM attendance\nWHERE att_date = '2026-02-10'\n  AND status IN ('A', 'H')\n  AND excuse <> 'X';"),
+  list(prompt = paste0("Fighting or physical aggression between 2025-12-01 and 2025-12-19: return incident_id, ",
+                       "school_id, incident_date, incident_type."),
+       ref = "SELECT incident_id, school_id, incident_date, incident_type FROM incidents WHERE incident_date BETWEEN '2025-12-01' AND '2025-12-19' AND incident_type IN ('Fighting', 'Physical aggression');",
+       solution = "SELECT incident_id, school_id, incident_date, incident_type\nFROM incidents\nWHERE incident_date BETWEEN '2025-12-01' AND '2025-12-19'\n  AND incident_type IN ('Fighting', 'Physical aggression');"),
+  list(prompt = paste0("2026 enrollments at Lakeview (school_id 70) whose end_status is anything other than ",
+                       "'TRMN', open enrollments (NULL) included: return enrollment_id and end_status."),
+       ref = "SELECT enrollment_id, end_status FROM enrollments WHERE school_id = 70 AND school_year = 2026 AND (end_status <> 'TRMN' OR end_status IS NULL);",
+       solution = "SELECT enrollment_id, end_status\nFROM enrollments\nWHERE school_id = 70\n  AND school_year = 2026\n  AND (end_status <> 'TRMN' OR end_status IS NULL);"),
+  list(prompt = paste0("Students whose home_language is Somali and whose last_name begins with A: return ",
+                       "student_id, last_name, first_name."),
+       ref = "SELECT student_id, last_name, first_name FROM students WHERE home_language = 'Somali' AND last_name LIKE 'A%';",
+       solution = "SELECT student_id, last_name, first_name\nFROM students\nWHERE home_language = 'Somali'\n  AND last_name LIKE 'A%';")
+)
+
+dsec_where <- function() district_section(
+  "Dates as text, code lists, and the open enrollment",
+  p(style = "line-height:1.6;",
+    "District dates are stored as ISO text (", kbd("'2025-10-01'"), "), which compares ",
+    "correctly as text, so ", kbd("BETWEEN"), " and ", kbd("<="), " work on them directly. Codes ",
+    "come in short lists, which is what ", kbd("IN"), " is for. And an enrollment that has not ",
+    "ended has ", kbd("end_date"), " NULL, which brings step 5 of this tab into every query."),
+  dsql_code("SELECT enrollment_id, student_id, end_status\nFROM enrollments\nWHERE school_year = 2026\n  AND end_status <> 'GRAD';"),
+  dsql_editor("dzwhe1", "SELECT COUNT(*) AS rows_kept\nFROM enrollments\nWHERE school_year = 2026\n  AND end_status <> 'GRAD';"),
+  callout_warm(tags$b("The question was “everyone who has not graduated.” "),
+    "The query above returns only the 2026 enrollments that have ", tags$em("ended"), " with ",
+    "some other code: 80 of 1,479. The 1,399 still open have ", kbd("end_status"), " NULL, and ",
+    kbd("NULL <> 'GRAD'"), " is unknown, so every one of them is dropped, silently. Add ",
+    kbd("OR end_status IS NULL"), " (in parentheses) and they come back."),
+  tsql_note("SELECT enrollment_id, student_id, end_status\nFROM enrollments\nWHERE school_year = 2026\n  AND (end_status <> 'GRAD' OR end_status IS NULL);",
+    "Identical; three-valued logic is the standard's, not SQLite's. One SQL Server difference ",
+    "worth knowing: its default collation usually makes ", kbd("="), " and ", kbd("LIKE"),
+    " case-insensitive, so ", kbd("'pi' = 'PI'"), " is true there and false here."),
+  district_quest(WHERE_DQUEST, "dzwheq", "Five filters on the district")
+)
+
+# ---- ORDER BY ---------------------------------------------------------------
+ORDER_DQUEST <- list(
+  list(prompt = "Schools ordered by opened_year, oldest first, ties by school_id: return school_name, opened_year.",
+       ref = "SELECT school_name, opened_year FROM schools ORDER BY opened_year, school_id;", ordered = TRUE,
+       solution = "SELECT school_name, opened_year\nFROM schools\nORDER BY opened_year, school_id;"),
+  list(prompt = paste0("The ten most recent incidents: incident_id and incident_date, newest first, ties by ",
+                       "incident_id descending."),
+       ref = "SELECT incident_id, incident_date FROM incidents ORDER BY incident_date DESC, incident_id DESC LIMIT 10;", ordered = TRUE,
+       solution = "SELECT incident_id, incident_date\nFROM incidents\nORDER BY incident_date DESC, incident_id DESC\nLIMIT 10;"),
+  list(prompt = paste0("The grade codes used in 2024-25 (school_year 2025), one row each, in school order: KG ",
+                       "first, then 01 to 12. Return grade."),
+       ref = "SELECT DISTINCT grade FROM enrollments WHERE school_year = 2025 ORDER BY CASE WHEN grade = 'KG' THEN 0 ELSE CAST(grade AS INTEGER) END;", ordered = TRUE,
+       solution = "SELECT DISTINCT grade\nFROM enrollments\nWHERE school_year = 2025\nORDER BY CASE WHEN grade = 'KG' THEN 0\n              ELSE CAST(grade AS INTEGER) END;"),
+  list(prompt = paste0("Top five 2025 grade 08 reading scale scores: student_id and scale_score, highest first, ",
+                       "ties by student_id. (Only tested students have scores.)"),
+       ref = "SELECT student_id, scale_score FROM test_results WHERE school_year = 2025 AND subject = 'Reading' AND grade_tested = '08' AND scale_score IS NOT NULL ORDER BY scale_score DESC, student_id LIMIT 5;", ordered = TRUE,
+       solution = "SELECT student_id, scale_score\nFROM test_results\nWHERE school_year = 2025\n  AND subject = 'Reading'\n  AND grade_tested = '08'\n  AND scale_score IS NOT NULL\nORDER BY scale_score DESC, student_id\nLIMIT 5;"),
+  list(prompt = paste0("Horizon's (school_id 90) 2026 primary enrollments by end_date, earliest first, with ",
+                       "open enrollments (NULL) last, ties by enrollment_id: return enrollment_id, student_id, end_date."),
+       ref = "SELECT enrollment_id, student_id, end_date FROM enrollments WHERE school_id = 90 AND school_year = 2026 AND service_type = 'P' ORDER BY end_date IS NULL, end_date, enrollment_id;", ordered = TRUE,
+       solution = "SELECT enrollment_id, student_id, end_date\nFROM enrollments\nWHERE school_id = 90\n  AND school_year = 2026\n  AND service_type = 'P'\nORDER BY end_date IS NULL, end_date, enrollment_id;")
+)
+
+dsec_order <- function() district_section(
+  "Sorting grades, and lists people will read",
+  p(style = "line-height:1.6;",
+    "Grade codes are text: ", kbd("'KG'"), ", ", kbd("'01'"), " ... ", kbd("'12'"), ". Text sorts ",
+    "character by character, and ", kbd("'K'"), " comes after every digit, so kindergarten lands ",
+    "after grade 12. The two-digit codes at least sort among themselves; ", kbd("'9'"), " would ",
+    "sort after ", kbd("'12'"), " too, since ", kbd("'9'"), " > ", kbd("'1'"), "."),
+  dsql_code("SELECT DISTINCT grade\nFROM enrollments\nWHERE school_year = 2025\nORDER BY grade;"),
+  dsql_editor("dzord1", "SELECT g.grade, g.grade_order\nFROM grade_levels AS g\nORDER BY g.grade_order;"),
+  p(style = "line-height:1.6;",
+    "Two fixes. Sort by an expression that turns the code into a number (",
+    kbd("CASE WHEN grade = 'KG' THEN 0 ELSE CAST(grade AS INTEGER) END"), "), or join the lookup ",
+    "table that already has one (", kbd("grade_levels.grade_order"), ", in the editor). The lookup ",
+    "is better: the sort rule lives in one place, and pre-K or an ungraded program can be added ",
+    "without editing every report."),
+  callout_warm(tags$b("Lists for people need a total order. "),
+    "A roster sorted by grade and last name puts two students named Nguyen in grade 4 in ",
+    "whatever order the database finds them, which can change between runs. Finish with a ",
+    "column that is unique (", kbd("student_id"), ") and the printout matches the screen."),
+  tsql_note("SELECT TOP 10 incident_id, incident_date\nFROM incidents\nORDER BY incident_date DESC, incident_id DESC;\n\n-- NULLs: SQL Server sorts them first in ascending order and has no NULLS LAST;\n-- write ORDER BY CASE WHEN end_date IS NULL THEN 1 ELSE 0 END, end_date",
+    kbd("TOP"), " goes after ", kbd("SELECT"), "; ", kbd("OFFSET ... FETCH NEXT ... ROWS ONLY"),
+    " is SQL Server's version of ", kbd("LIMIT ... OFFSET"), ". SQLite, too, sorts NULLs first ",
+    "when ascending, which is why the last question uses ", kbd("end_date IS NULL"), " as the ",
+    "first sort key: it is 0 for dated rows and 1 for open ones."),
+  district_quest(ORDER_DQUEST, "dzordq", "Five sorted district lists",
+                 "All five are graded on row order, so each says how to break ties.")
+)
+
+# ---- GROUP BY ---------------------------------------------------------------
+GROUP_DQUEST <- list(
+  list(prompt = "Enrollment rows per school year (all rows): return school_year and n_rows.",
+       ref = "SELECT school_year, COUNT(*) AS n_rows FROM enrollments GROUP BY school_year;",
+       solution = "SELECT school_year, COUNT(*) AS n_rows\nFROM enrollments\nGROUP BY school_year;"),
+  list(prompt = paste0("Distinct students by grade at Birchwood (school_id 10) this year, primary enrollments: ",
+                       "return grade and students."),
+       ref = "SELECT grade, COUNT(DISTINCT student_id) AS students FROM enrollments WHERE school_id = 10 AND school_year = 2026 AND service_type = 'P' GROUP BY grade;",
+       solution = "SELECT grade, COUNT(DISTINCT student_id) AS students\nFROM enrollments\nWHERE school_id = 10\n  AND school_year = 2026\n  AND service_type = 'P'\nGROUP BY grade;"),
+  list(prompt = "Tardies (status 'T') by school this year: return school_id and tardies.",
+       ref = "SELECT school_id, COUNT(*) AS tardies FROM attendance WHERE status = 'T' GROUP BY school_id;",
+       solution = "SELECT school_id, COUNT(*) AS tardies\nFROM attendance\nWHERE status = 'T'\nGROUP BY school_id;"),
+  list(prompt = paste0("Students with 15 or more unexcused full-day absences (status 'A', excuse 'U') this year: ",
+                       "return student_id and unexcused."),
+       ref = "SELECT student_id, COUNT(*) AS unexcused FROM attendance WHERE status = 'A' AND excuse = 'U' GROUP BY student_id HAVING COUNT(*) >= 15;",
+       solution = "SELECT student_id, COUNT(*) AS unexcused\nFROM attendance\nWHERE status = 'A'\n  AND excuse = 'U'\nGROUP BY student_id\nHAVING COUNT(*) >= 15;"),
+  list(prompt = paste0("Average 2025 Reading scale score by grade, tested students only, rounded to 1: return ",
+                       "grade_tested and avg_score."),
+       ref = "SELECT grade_tested, ROUND(AVG(scale_score), 1) AS avg_score FROM test_results WHERE school_year = 2025 AND subject = 'Reading' AND test_status = 'Tested' GROUP BY grade_tested;",
+       solution = "SELECT grade_tested, ROUND(AVG(scale_score), 1) AS avg_score\nFROM test_results\nWHERE school_year = 2025\n  AND subject = 'Reading'\n  AND test_status = 'Tested'\nGROUP BY grade_tested;")
+)
+
+dsec_group <- function() district_section(
+  "Rows, students, and the unit of a count",
+  p(style = "line-height:1.6;",
+    "Most district tables hold several rows per student: one per enrollment spell, per absence, ",
+    "per program spell, per test. ", kbd("COUNT(*)"), " counts those rows. When the question is ",
+    "about students, the count is ", kbd("COUNT(DISTINCT student_id)"), ", and the difference is ",
+    "rarely small."),
+  dsql_code("SELECT school_id,\n       COUNT(*)                   AS enrollment_rows,\n       COUNT(DISTINCT student_id) AS students\nFROM enrollments\nWHERE school_year = 2026\nGROUP BY school_id;"),
+  dsql_editor("dzgrp1", "SELECT school_id,\n       COUNT(*)                   AS enrollment_rows,\n       COUNT(DISTINCT student_id) AS students\nFROM enrollments\nWHERE school_year = 2026\nGROUP BY school_id;"),
+  p(style = "line-height:1.6;",
+    "And ", kbd("HAVING"), " is how a district finds students who meet a threshold: grouped by ",
+    "student, filtered on the group's count."),
+  dsql_code("SELECT student_id, COUNT(*) AS unexcused_days\nFROM attendance\nWHERE status = 'A' AND excuse = 'U'\nGROUP BY student_id\nHAVING COUNT(*) >= 15;"),
+  help_details("Unexcused absences are a truancy measure",
+    tagList("Minnesota's truancy rules count unexcused absences; its attendance measures count ",
+      "all absences. A list from the query above is a truancy list, and it should be called that. ",
+      "The Attendance tab computes the attendance measures.")),
+  tsql_note("SELECT school_id, COUNT(*) AS enrollment_rows, COUNT(DISTINCT student_id) AS students\nFROM enrollments\nWHERE school_year = 2026\nGROUP BY school_id;",
+    "Identical. One difference shows up in GROUP BY queries: SQL Server rejects a column in ",
+    kbd("SELECT"), " that is neither grouped nor aggregated, where SQLite quietly picks a value ",
+    "from some row of the group. If a query works here and fails there with ", tags$em("“is ",
+    "invalid in the select list”"), ", that is why."),
+  district_quest(GROUP_DQUEST, "dzgrpq", "Five district summaries")
+)
+
+# ---- Functions --------------------------------------------------------------
+FUNC_DQUEST <- list(
+  list(prompt = paste0("For 2026 enrollments that have ended, the calendar days on roll: return enrollment_id ",
+                       "and days_on_roll = julianday(end_date) - julianday(start_date) + 1."),
+       ref = "SELECT enrollment_id, julianday(end_date) - julianday(start_date) + 1 AS days_on_roll FROM enrollments WHERE school_year = 2026 AND end_date IS NOT NULL;",
+       solution = "SELECT enrollment_id,\n       julianday(end_date) - julianday(start_date) + 1 AS days_on_roll\nFROM enrollments\nWHERE school_year = 2026\n  AND end_date IS NOT NULL;"),
+  list(prompt = paste0("Age on 2025-09-01 of students who entered 9th grade in 2025-26 (entered_9th_year 2026): ",
+                       "return student_id and age, using the year difference minus 1 if the birthday had not ",
+                       "come yet by September 1."),
+       ref = "SELECT student_id, CAST(strftime('%Y', '2025-09-01') AS INTEGER) - CAST(strftime('%Y', birth_date) AS INTEGER) - (strftime('%m-%d', birth_date) > '09-01') AS age FROM students WHERE entered_9th_year = 2026;",
+       solution = "SELECT student_id,\n       CAST(strftime('%Y', '2025-09-01') AS INTEGER)\n     - CAST(strftime('%Y', birth_date) AS INTEGER)\n     - (strftime('%m-%d', birth_date) > '09-01') AS age\nFROM students\nWHERE entered_9th_year = 2026;"),
+  list(prompt = paste0("Absence rows by school, split by excuse in one pass: return school_id, excused (E), ",
+                       "unexcused (U), and suspended (S) counts, using SUM(CASE ...)."),
+       ref = "SELECT school_id, SUM(CASE WHEN excuse = 'E' THEN 1 ELSE 0 END) AS excused, SUM(CASE WHEN excuse = 'U' THEN 1 ELSE 0 END) AS unexcused, SUM(CASE WHEN excuse = 'S' THEN 1 ELSE 0 END) AS suspended FROM attendance WHERE status IN ('A', 'H') GROUP BY school_id;",
+       solution = "SELECT school_id,\n       SUM(CASE WHEN excuse = 'E' THEN 1 ELSE 0 END) AS excused,\n       SUM(CASE WHEN excuse = 'U' THEN 1 ELSE 0 END) AS unexcused,\n       SUM(CASE WHEN excuse = 'S' THEN 1 ELSE 0 END) AS suspended\nFROM attendance\nWHERE status IN ('A', 'H')\nGROUP BY school_id;"),
+  list(prompt = paste0("Percent of 2025 test records with test_status 'Tested', by subject, rounded to 1: return ",
+                       "subject and pct_tested. Watch the integer division."),
+       ref = "SELECT subject, ROUND(100.0 * SUM(CASE WHEN test_status = 'Tested' THEN 1 ELSE 0 END) / COUNT(*), 1) AS pct_tested FROM test_results WHERE school_year = 2025 GROUP BY subject;",
+       solution = "SELECT subject,\n       ROUND(100.0 * SUM(CASE WHEN test_status = 'Tested' THEN 1 ELSE 0 END) / COUNT(*), 1) AS pct_tested\nFROM test_results\nWHERE school_year = 2025\nGROUP BY subject;"),
+  list(prompt = paste0("Group students by language: language_group is 'English' when home_language is English, ",
+                       "otherwise 'Another language'. Return language_group and students."),
+       ref = "SELECT CASE WHEN home_language = 'English' THEN 'English' ELSE 'Another language' END AS language_group, COUNT(*) AS students FROM students GROUP BY language_group;",
+       solution = "SELECT CASE WHEN home_language = 'English' THEN 'English'\n            ELSE 'Another language' END AS language_group,\n       COUNT(*) AS students\nFROM students\nGROUP BY language_group;")
+)
+
+dsec_functions <- function() district_section(
+  "Dates, CASE, and rates that are not secretly zero",
+  p(style = "line-height:1.6;",
+    "District reporting leans on three of this tab's tools: date arithmetic (days enrolled, ",
+    "age on a date), ", kbd("CASE"), " (turning codes into categories, and counting by category in ",
+    "one pass), and careful division."),
+  dsql_code("SELECT enrollment_id, start_date,\n       COALESCE(end_date, '2026-03-31') AS end_or_today,\n       julianday(COALESCE(end_date, '2026-03-31')) - julianday(start_date) + 1 AS calendar_days\nFROM enrollments\nWHERE school_year = 2026\nLIMIT 10;"),
+  dsql_editor("dzfun1", "SELECT school_id,\n       SUM(CASE WHEN excuse = 'E' THEN 1 ELSE 0 END) AS excused,\n       SUM(CASE WHEN excuse = 'U' THEN 1 ELSE 0 END) AS unexcused,\n       COUNT(*) AS all_absence_rows\nFROM attendance\nWHERE status IN ('A', 'H')\nGROUP BY school_id;"),
+  callout_warm(tags$b("Calendar days are not school days. "),
+    kbd("julianday"), " differences count weekends and holidays. For anything about attendance ",
+    "or membership, count rows of ", kbd("calendar_days"), " with ", kbd("instructional = 1"),
+    " instead; the Attendance tab does."),
+  help_details("Age on a date",
+    tagList("Age is the year difference, less one if the birthday has not come yet that year. ",
+      "Comparing ", kbd("strftime('%m-%d', birth_date)"), " with ", kbd("'09-01'"), " as text works ",
+      "because both are zero-padded. Minnesota's kindergarten eligibility and many program rules ",
+      "use age on September 1.")),
+  tsql_note("SELECT enrollment_id,\n       DATEDIFF(day, start_date, COALESCE(end_date, @as_of)) + 1 AS calendar_days,\n       DATEDIFF(year, birth_date, '2025-09-01')\n         - CASE WHEN FORMAT(birth_date, 'MM-dd') > '09-01' THEN 1 ELSE 0 END AS age\nFROM ...;",
+    kbd("DATEDIFF(year, a, b)"), " counts year boundaries crossed, not birthdays, so it needs the ",
+    "same correction. ", kbd("IIF(cond, a, b)"), " is SQL Server's short form of a two-branch ",
+    kbd("CASE"), "."),
+  district_quest(FUNC_DQUEST, "dzfunq", "Five district calculations")
+)
+
+# ---- JOINs ------------------------------------------------------------------
+JOINS_DQUEST <- list(
+  list(prompt = paste0("Students enrolled at Riverbend (school_id 30) today, 2026-03-31, with names: return ",
+                       "student_id, last_name, first_name, grade (primary enrollments)."),
+       ref = "SELECT s.student_id, s.last_name, s.first_name, e.grade FROM enrollments e JOIN students s ON s.student_id = e.student_id WHERE e.school_id = 30 AND e.service_type = 'P' AND e.start_date <= '2026-03-31' AND (e.end_date IS NULL OR e.end_date >= '2026-03-31');",
+       solution = "SELECT s.student_id, s.last_name, s.first_name, e.grade\nFROM enrollments AS e\nJOIN students AS s ON s.student_id = e.student_id\nWHERE e.school_id = 30\n  AND e.service_type = 'P'\n  AND e.start_date <= '2026-03-31'\n  AND (e.end_date IS NULL OR e.end_date >= '2026-03-31');"),
+  list(prompt = paste0("What each 2025 exit code means: for 2025 enrollments with an end_status, return ",
+                       "enrollment_id, end_status, and the description from status_codes (match both ",
+                       "key columns)."),
+       ref = "SELECT e.enrollment_id, e.end_status, sc.description FROM enrollments e JOIN status_codes sc ON sc.code = e.end_status AND sc.code_type = 'end' WHERE e.school_year = 2025;",
+       solution = "SELECT e.enrollment_id, e.end_status, sc.description\nFROM enrollments AS e\nJOIN status_codes AS sc\n  ON sc.code = e.end_status\n AND sc.code_type = 'end'\nWHERE e.school_year = 2025;"),
+  list(prompt = "Lakeview's (school_id 70) first-semester sections: return section_id, course_name, and the teacher's last_name.",
+       ref = "SELECT sec.section_id, c.course_name, st.last_name FROM sections sec JOIN courses c ON c.course_id = sec.course_id JOIN staff st ON st.staff_id = sec.teacher_id WHERE sec.school_id = 70 AND sec.term = 'S1';",
+       solution = "SELECT sec.section_id, c.course_name, st.last_name\nFROM sections AS sec\nJOIN courses AS c ON c.course_id = sec.course_id\nJOIN staff AS st ON st.staff_id = sec.teacher_id\nWHERE sec.school_id = 70\n  AND sec.term = 'S1';"),
+  list(prompt = paste0("How many students enrolled (primary) on 2025-10-01 have never been an offender in an ",
+                       "incident? One column, students. (LEFT JOIN, with the role condition in ON.)"),
+       ref = "SELECT COUNT(DISTINCT e.student_id) AS students FROM enrollments e LEFT JOIN incident_students p ON p.student_id = e.student_id AND p.role = 'Offender' WHERE e.service_type = 'P' AND e.start_date <= '2025-10-01' AND (e.end_date IS NULL OR e.end_date >= '2025-10-01') AND p.incident_id IS NULL;",
+       solution = "SELECT COUNT(DISTINCT e.student_id) AS students\nFROM enrollments AS e\nLEFT JOIN incident_students AS p\n       ON p.student_id = e.student_id\n      AND p.role = 'Offender'\nWHERE e.service_type = 'P'\n  AND e.start_date <= '2025-10-01'\n  AND (e.end_date IS NULL OR e.end_date >= '2025-10-01')\n  AND p.incident_id IS NULL;"),
+  list(prompt = paste0("Consequences for incidents in December 2025 (incident_date from 2025-12-01 to 2025-12-31): ",
+                       "return resolution_id, student_id, and the resolution's description."),
+       ref = "SELECT r.resolution_id, r.student_id, rc.description FROM resolutions r JOIN incidents i ON i.incident_id = r.incident_id JOIN resolution_codes rc ON rc.code = r.resolution_code WHERE i.incident_date BETWEEN '2025-12-01' AND '2025-12-31';",
+       solution = "SELECT r.resolution_id, r.student_id, rc.description\nFROM resolutions AS r\nJOIN incidents AS i ON i.incident_id = r.incident_id\nJOIN resolution_codes AS rc ON rc.code = r.resolution_code\nWHERE i.incident_date BETWEEN '2025-12-01' AND '2025-12-31';")
+)
+
+dsec_joins <- function() district_section(
+  "Joins on student data: two-column keys and the program fan-out",
+  p(style = "line-height:1.6;",
+    "Two district joins deserve a habit each. Lookup tables like ", kbd("status_codes"),
+    " have a two-column key, because the same code can mean different things as a start code ",
+    "and an end code; join on both columns. And any table with several rows per student ",
+    "(programs, absences, incidents) multiplies the rows it is joined to."),
+  dsql_code("-- One row per student per program spell, not per student\nSELECT COUNT(*)                     AS rows_returned,\n       COUNT(DISTINCT e.student_id) AS students\nFROM enrollments AS e\nJOIN programs AS p ON p.student_id = e.student_id\nWHERE e.service_type = 'P'\n  AND e.start_date <= '2025-10-01'\n  AND (e.end_date IS NULL OR e.end_date >= '2025-10-01');"),
+  dsql_editor("dzjoi1", "SELECT COUNT(*)                     AS rows_returned,\n       COUNT(DISTINCT e.student_id) AS students\nFROM enrollments AS e\nJOIN programs AS p ON p.student_id = e.student_id\nWHERE e.service_type = 'P'\n  AND e.start_date <= '2025-10-01'\n  AND (e.end_date IS NULL OR e.end_date >= '2025-10-01');"),
+  p(style = "line-height:1.6;",
+    "The October 1 population is 1,386 students; joined to every program spell any of them has ",
+    "ever had, it becomes 3,404 rows. Sum anything per row after that join and the total is ",
+    "inflated by however many spells each student has. Filter the program side to the spells that ",
+    "matter (one program, active on the date) or count distinct students."),
+  callout_warm(tags$b("The LEFT JOIN trap, district edition. "),
+    "To count students with no incidents, ", kbd("LEFT JOIN incident_students ... WHERE p.role = 'Offender' AND p.incident_id IS NULL"), " returns nobody: students with no ",
+    "incident have a NULL role, which fails ", kbd("p.role = 'Offender'"), ". The role test goes ",
+    "in ", kbd("ON"), "."),
+  tsql_note("SELECT e.enrollment_id, e.end_status, sc.description\nFROM dbo.enrollments AS e\nJOIN dbo.status_codes AS sc\n  ON sc.code = e.end_status AND sc.code_type = 'end';",
+    "Identical, with the ", kbd("dbo."), " schema prefix you will see in SQL Server code. SQL ",
+    "Server has no ", kbd("USING"), " and no ", kbd("NATURAL JOIN"), "; write the ", kbd("ON"),
+    " condition."),
+  district_quest(JOINS_DQUEST, "dzjoiq", "Five district joins")
+)
+
+# ---- UNION ------------------------------------------------------------------
+UNION_DQUEST <- list(
+  list(prompt = paste0("Students in the 2026 October 1 snapshot who, by the live data, had no primary enrollment ",
+                       "open on 2025-10-01: return student_id, using EXCEPT."),
+       ref = "SELECT student_id FROM oct1_snapshot WHERE school_year = 2026 EXCEPT SELECT student_id FROM enrollments WHERE service_type = 'P' AND start_date <= '2025-10-01' AND (end_date IS NULL OR end_date >= '2025-10-01');",
+       solution = "SELECT student_id FROM oct1_snapshot WHERE school_year = 2026\nEXCEPT\nSELECT student_id FROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2025-10-01'\n  AND (end_date IS NULL OR end_date >= '2025-10-01');"),
+  list(prompt = "Students who were both EL and SPED on 2025-10-01 (spells covering that date): return student_id, using INTERSECT.",
+       ref = "SELECT student_id FROM programs WHERE program = 'EL' AND start_date <= '2025-10-01' AND (end_date IS NULL OR end_date >= '2025-10-01') INTERSECT SELECT student_id FROM programs WHERE program = 'SPED' AND start_date <= '2025-10-01' AND (end_date IS NULL OR end_date >= '2025-10-01');",
+       solution = "SELECT student_id FROM programs\nWHERE program = 'EL' AND start_date <= '2025-10-01'\n  AND (end_date IS NULL OR end_date >= '2025-10-01')\nINTERSECT\nSELECT student_id FROM programs\nWHERE program = 'SPED' AND start_date <= '2025-10-01'\n  AND (end_date IS NULL OR end_date >= '2025-10-01');"),
+  list(prompt = paste0("State IDs of students we had enrolled (primary) on 2025-10-01 that are not in the ",
+                       "state's return file: return state_id."),
+       ref = "SELECT s.state_id FROM students s JOIN enrollments e ON e.student_id = s.student_id WHERE e.service_type = 'P' AND e.start_date <= '2025-10-01' AND (e.end_date IS NULL OR e.end_date >= '2025-10-01') EXCEPT SELECT state_id FROM state_oct1_return;",
+       solution = "SELECT s.state_id\nFROM students AS s\nJOIN enrollments AS e ON e.student_id = s.student_id\nWHERE e.service_type = 'P'\n  AND e.start_date <= '2025-10-01'\n  AND (e.end_date IS NULL OR e.end_date >= '2025-10-01')\nEXCEPT\nSELECT state_id FROM state_oct1_return;"),
+  list(prompt = paste0("Everyone involved in a December 2025 incident, as offender or victim, once each: return ",
+                       "student_id from two SELECTs (role 'Offender'; role 'Victim') combined with UNION."),
+       ref = "SELECT p.student_id FROM incident_students p JOIN incidents i ON i.incident_id = p.incident_id WHERE i.incident_date BETWEEN '2025-12-01' AND '2025-12-31' AND p.role = 'Offender' UNION SELECT p.student_id FROM incident_students p JOIN incidents i ON i.incident_id = p.incident_id WHERE i.incident_date BETWEEN '2025-12-01' AND '2025-12-31' AND p.role = 'Victim';",
+       solution = "SELECT p.student_id\nFROM incident_students AS p\nJOIN incidents AS i ON i.incident_id = p.incident_id\nWHERE i.incident_date BETWEEN '2025-12-01' AND '2025-12-31'\n  AND p.role = 'Offender'\nUNION\nSELECT p.student_id\nFROM incident_students AS p\nJOIN incidents AS i ON i.incident_id = p.incident_id\nWHERE i.incident_date BETWEEN '2025-12-01' AND '2025-12-31'\n  AND p.role = 'Victim';"),
+  list(prompt = paste0("Courses taught in the first semester of 2025-26 at both Lakeview (70) and Riverside (80), ",
+                       "from sections: return course_id."),
+       ref = "SELECT course_id FROM sections WHERE school_id = 70 AND term = 'S1' INTERSECT SELECT course_id FROM sections WHERE school_id = 80 AND term = 'S1';",
+       solution = "SELECT course_id FROM sections WHERE school_id = 70 AND term = 'S1'\nINTERSECT\nSELECT course_id FROM sections WHERE school_id = 80 AND term = 'S1';")
+)
+
+dsec_union <- function() district_section(
+  "Reconciling two lists",
+  p(style = "line-height:1.6;",
+    kbd("EXCEPT"), " is the reconciliation operator. Districts compare their own lists with ",
+    "other lists constantly: this year's count against a frozen snapshot, the district's file ",
+    "against the state's, a program roster against enrollment. Run it in both directions; each ",
+    "side's leftovers have different explanations."),
+  dsql_code("SELECT student_id FROM oct1_snapshot WHERE school_year = 2026\nEXCEPT\nSELECT student_id FROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2025-10-01'\n  AND (end_date IS NULL OR end_date >= '2025-10-01');"),
+  dsql_editor("dzuni1", "SELECT student_id FROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2025-10-01'\n  AND (end_date IS NULL OR end_date >= '2025-10-01')\nEXCEPT\nSELECT student_id FROM oct1_snapshot WHERE school_year = 2026;"),
+  p(style = "line-height:1.6;",
+    "The first direction finds four students: no-shows who were counted on October 1 and later ",
+    "recorded as never having attended. The second (in the editor) finds none: everyone the live ",
+    "data counts, the snapshot counted too. Both answers are informative, and only running both ",
+    "tells you which kind of difference you have."),
+  callout_warm(tags$b("Compare on identifiers the other side has. "),
+    "The state's file has state IDs and state school numbers, not the district's ",
+    kbd("student_id"), ". Translate your side into the other side's terms (join ",
+    kbd("students"), " for ", kbd("state_id"), ", ", kbd("schools"), " for ",
+    kbd("state_school_number"), ") before the ", kbd("EXCEPT"), ". The Data quality tab does ",
+    "the full reconciliation."),
+  tsql_note("SELECT student_id FROM dbo.oct1_snapshot WHERE school_year = 2026\nEXCEPT\nSELECT student_id FROM dbo.enrollments\nWHERE service_type = 'P' AND start_date <= @count_date\n  AND (end_date IS NULL OR end_date >= @count_date);",
+    "Identical. SQL Server evaluates ", kbd("INTERSECT"), " before ", kbd("UNION"), " and ",
+    kbd("EXCEPT"), " when they are mixed, as the standard says; SQLite goes left to right. ",
+    "Parenthesize mixed set operations and both agree."),
+  district_quest(UNION_DQUEST, "dzuniq", "Five district comparisons")
+)
+
+# ---- Subqueries -------------------------------------------------------------
+SUBQ_DQUEST <- list(
+  list(prompt = paste0("Using a one-row params CTE that holds the date '2026-01-15' as as_of, count students ",
+                       "with a primary enrollment open on that date. One column, students."),
+       ref = "WITH params AS (SELECT '2026-01-15' AS as_of) SELECT COUNT(DISTINCT e.student_id) AS students FROM enrollments e, params p WHERE e.service_type = 'P' AND e.start_date <= p.as_of AND (e.end_date IS NULL OR e.end_date >= p.as_of);",
+       solution = "WITH params AS (SELECT '2026-01-15' AS as_of)\nSELECT COUNT(DISTINCT e.student_id) AS students\nFROM enrollments AS e, params AS p\nWHERE e.service_type = 'P'\n  AND e.start_date <= p.as_of\n  AND (e.end_date IS NULL OR e.end_date >= p.as_of);"),
+  list(prompt = paste0("Students in the state's October 1 return who are not enrolled today (2026-03-31), by the ",
+                       "district's data: return state_id. Use NOT EXISTS (NOT IN gives the wrong answer here; ",
+                       "the walkthrough above says why)."),
+       ref = "SELECT r.state_id FROM state_oct1_return r WHERE NOT EXISTS (SELECT 1 FROM students s JOIN enrollments e ON e.student_id = s.student_id WHERE s.state_id = r.state_id AND e.service_type = 'P' AND e.start_date <= '2026-03-31' AND (e.end_date IS NULL OR e.end_date >= '2026-03-31'));",
+       solution = "SELECT r.state_id\nFROM state_oct1_return AS r\nWHERE NOT EXISTS (\n  SELECT 1\n  FROM students AS s\n  JOIN enrollments AS e ON e.student_id = s.student_id\n  WHERE s.state_id = r.state_id\n    AND e.service_type = 'P'\n    AND e.start_date <= '2026-03-31'\n    AND (e.end_date IS NULL OR e.end_date >= '2026-03-31'));"),
+  list(prompt = paste0("Schools whose October 1, 2025 enrollment is above the average school's: return school_id ",
+                       "and students. (A CTE of per-school counts, compared with its own average.)"),
+       ref = "WITH c AS (SELECT school_id, COUNT(DISTINCT student_id) AS students FROM enrollments WHERE service_type = 'P' AND start_date <= '2025-10-01' AND (end_date IS NULL OR end_date >= '2025-10-01') GROUP BY school_id) SELECT school_id, students FROM c WHERE students > (SELECT AVG(students) FROM c);",
+       solution = "WITH counts AS (\n  SELECT school_id, COUNT(DISTINCT student_id) AS students\n  FROM enrollments\n  WHERE service_type = 'P'\n    AND start_date <= '2025-10-01'\n    AND (end_date IS NULL OR end_date >= '2025-10-01')\n  GROUP BY school_id\n)\nSELECT school_id, students\nFROM counts\nWHERE students > (SELECT AVG(students) FROM counts);"),
+  list(prompt = paste0("Students enrolled today (primary, open on 2026-03-31) who have had an out-of-school ",
+                       "suspension (OSS) for an incident on or after 2025-07-01: return student_id, once each, ",
+                       "using EXISTS."),
+       ref = "SELECT DISTINCT e.student_id FROM enrollments e WHERE e.service_type = 'P' AND e.start_date <= '2026-03-31' AND (e.end_date IS NULL OR e.end_date >= '2026-03-31') AND EXISTS (SELECT 1 FROM resolutions r JOIN incidents i ON i.incident_id = r.incident_id WHERE r.student_id = e.student_id AND r.resolution_code = 'OSS' AND i.incident_date >= '2025-07-01');",
+       solution = "SELECT DISTINCT e.student_id\nFROM enrollments AS e\nWHERE e.service_type = 'P'\n  AND e.start_date <= '2026-03-31'\n  AND (e.end_date IS NULL OR e.end_date >= '2026-03-31')\n  AND EXISTS (\n        SELECT 1\n        FROM resolutions AS r\n        JOIN incidents AS i ON i.incident_id = r.incident_id\n        WHERE r.student_id = e.student_id\n          AND r.resolution_code = 'OSS'\n          AND i.incident_date >= '2025-07-01');"),
+  list(prompt = paste0("Each student's most recent 2026 primary enrollment, by a correlated subquery on start_date: ",
+                       "return student_id, school_id, start_date for rows whose start_date equals that ",
+                       "student's latest 2026 primary start_date."),
+       ref = "SELECT e.student_id, e.school_id, e.start_date FROM enrollments e WHERE e.school_year = 2026 AND e.service_type = 'P' AND e.start_date = (SELECT MAX(e2.start_date) FROM enrollments e2 WHERE e2.student_id = e.student_id AND e2.school_year = 2026 AND e2.service_type = 'P');",
+       solution = "SELECT e.student_id, e.school_id, e.start_date\nFROM enrollments AS e\nWHERE e.school_year = 2026\n  AND e.service_type = 'P'\n  AND e.start_date = (\n        SELECT MAX(e2.start_date)\n        FROM enrollments AS e2\n        WHERE e2.student_id = e.student_id\n          AND e2.school_year = 2026\n          AND e2.service_type = 'P');")
+)
+
+dsec_subqueries <- function() district_section(
+  "An as-of date in one place, and NOT IN meets a NULL state ID",
+  p(style = "line-height:1.6;",
+    "A district report has an as-of date, and it appears in every filter. SQL Server would hold ",
+    "it in a variable. SQLite has none, but a one-row CTE does the same job: write the date once, ",
+    "join the CTE, and change one line to rerun the report for another day."),
+  dsql_code("WITH params AS (SELECT '2026-03-31' AS as_of)\nSELECT e.school_id, COUNT(DISTINCT e.student_id) AS students\nFROM enrollments AS e, params AS p\nWHERE e.service_type = 'P'\n  AND e.start_date <= p.as_of\n  AND (e.end_date IS NULL OR e.end_date >= p.as_of)\nGROUP BY e.school_id;"),
+  dsql_editor("dzsub1", "WITH params AS (SELECT '2026-03-31' AS as_of)\nSELECT e.school_id, COUNT(DISTINCT e.student_id) AS students\nFROM enrollments AS e, params AS p\nWHERE e.service_type = 'P'\n  AND e.start_date <= p.as_of\n  AND (e.end_date IS NULL OR e.end_date >= p.as_of)\nGROUP BY e.school_id;"),
+  p(style = "line-height:1.6;",
+    "Now this tab's ", kbd("NOT IN"), " trap, with real consequences. Which students in the state's ",
+    "October 1 file are no longer enrolled today?"),
+  dsql_code("SELECT COUNT(*) AS not_enrolled_today\nFROM state_oct1_return\nWHERE state_id NOT IN (\n  SELECT s.state_id\n  FROM students AS s\n  JOIN enrollments AS e ON e.student_id = s.student_id\n  WHERE e.service_type = 'P'\n    AND e.start_date <= '2026-03-31'\n    AND (e.end_date IS NULL OR e.end_date >= '2026-03-31'));"),
+  dsql_editor("dzsub2", "SELECT COUNT(*) AS not_enrolled_today\nFROM state_oct1_return AS r\nWHERE NOT EXISTS (\n  SELECT 1\n  FROM students AS s\n  JOIN enrollments AS e ON e.student_id = s.student_id\n  WHERE s.state_id = r.state_id\n    AND e.service_type = 'P'\n    AND e.start_date <= '2026-03-31'\n    AND (e.end_date IS NULL OR e.end_date >= '2026-03-31'));", height = "220px"),
+  callout_warm(tags$b("Zero, and wrong. "),
+    "The ", kbd("NOT IN"), " version answers 0. Four students enrolled today have no state ID ",
+    "yet, so the subquery's list contains NULL, and ", kbd("x NOT IN (..., NULL)"), " can never ",
+    "be true. The ", kbd("NOT EXISTS"), " version in the editor answers 57. Nothing in the first ",
+    "query looks wrong, and nothing errors."),
+  tsql_note("DECLARE @as_of date = '2026-03-31';\n\nSELECT COUNT(*) AS not_enrolled_today\nFROM dbo.state_oct1_return AS r\nWHERE NOT EXISTS (SELECT 1 FROM dbo.students AS s\n                  JOIN dbo.enrollments AS e ON e.student_id = s.student_id\n                  WHERE s.state_id = r.state_id AND e.service_type = 'P'\n                    AND e.start_date <= @as_of\n                    AND (e.end_date IS NULL OR e.end_date >= @as_of));",
+    "The variable replaces the params CTE. ", kbd("NOT IN"), " fails the same way in SQL Server; ",
+    "the rule is the standard's."),
+  district_quest(SUBQ_DQUEST, "dzsubq", "Five district subqueries")
+)
+
+# ---- Windows ----------------------------------------------------------------
+WIN_DQUEST <- list(
+  list(prompt = paste0("Each student's latest 2026 primary enrollment, using ROW_NUMBER (newest start_date first, ",
+                       "ties by enrollment_id descending): return student_id and school_id."),
+       ref = "SELECT student_id, school_id FROM (SELECT student_id, school_id, ROW_NUMBER() OVER (PARTITION BY student_id ORDER BY start_date DESC, enrollment_id DESC) AS rn FROM enrollments WHERE school_year = 2026 AND service_type = 'P') WHERE rn = 1;",
+       solution = "SELECT student_id, school_id\nFROM (\n  SELECT student_id, school_id,\n         ROW_NUMBER() OVER (PARTITION BY student_id\n                            ORDER BY start_date DESC, enrollment_id DESC) AS rn\n  FROM enrollments\n  WHERE school_year = 2026 AND service_type = 'P'\n)\nWHERE rn = 1;"),
+  list(prompt = paste0("October 1 snapshot counts by school and year, with the change from the school's previous ",
+                       "year (NULL for the first year): return school_id, school_year, students, change."),
+       ref = "SELECT school_id, school_year, COUNT(*) AS students, COUNT(*) - LAG(COUNT(*)) OVER (PARTITION BY school_id ORDER BY school_year) AS change FROM oct1_snapshot GROUP BY school_id, school_year;",
+       solution = "SELECT school_id, school_year,\n       COUNT(*) AS students,\n       COUNT(*) - LAG(COUNT(*)) OVER (PARTITION BY school_id\n                                      ORDER BY school_year) AS change\nFROM oct1_snapshot\nGROUP BY school_id, school_year;"),
+  list(prompt = paste0("District-wide full-day absences (status 'A', excuse not 'X') per day in January 2026, ",
+                       "with a running total: return att_date, absences, running_total."),
+       ref = "SELECT att_date, COUNT(*) AS absences, SUM(COUNT(*)) OVER (ORDER BY att_date) AS running_total FROM attendance WHERE status = 'A' AND excuse <> 'X' AND att_date BETWEEN '2026-01-01' AND '2026-01-31' GROUP BY att_date;",
+       solution = "SELECT att_date,\n       COUNT(*) AS absences,\n       SUM(COUNT(*)) OVER (ORDER BY att_date) AS running_total\nFROM attendance\nWHERE status = 'A'\n  AND excuse <> 'X'\n  AND att_date BETWEEN '2026-01-01' AND '2026-01-31'\nGROUP BY att_date;"),
+  list(prompt = paste0("Rank schools by their 2024-25 attendance rate (1 - total days absent / total membership days, ",
+                       "from attendance_year_summary), highest = 1: return school_id, rate rounded to 3, and rnk ",
+                       "(RANK on the unrounded rate)."),
+       ref = "SELECT school_id, ROUND(1 - SUM(days_absent) / SUM(days_membership), 3) AS rate, RANK() OVER (ORDER BY 1 - SUM(days_absent) / SUM(days_membership) DESC) AS rnk FROM attendance_year_summary WHERE school_year = 2025 GROUP BY school_id;",
+       solution = "SELECT school_id,\n       ROUND(1 - SUM(days_absent) / SUM(days_membership), 3) AS rate,\n       RANK() OVER (ORDER BY 1 - SUM(days_absent) / SUM(days_membership) DESC) AS rnk\nFROM attendance_year_summary\nWHERE school_year = 2025\nGROUP BY school_id;"),
+  list(prompt = paste0("Each tested 2025 grade 05 reading score beside its school's average: return student_id, ",
+                       "school_id, scale_score, and school_avg (AVG over the school, rounded to 1)."),
+       ref = "SELECT student_id, school_id, scale_score, ROUND(AVG(scale_score) OVER (PARTITION BY school_id), 1) AS school_avg FROM test_results WHERE school_year = 2025 AND subject = 'Reading' AND grade_tested = '05' AND test_status = 'Tested';",
+       solution = "SELECT student_id, school_id, scale_score,\n       ROUND(AVG(scale_score) OVER (PARTITION BY school_id), 1) AS school_avg\nFROM test_results\nWHERE school_year = 2025\n  AND subject = 'Reading'\n  AND grade_tested = '05'\n  AND test_status = 'Tested';")
+)
+
+dsec_windows <- function() district_section(
+  "Latest records, year-over-year change, running totals",
+  p(style = "line-height:1.6;",
+    "Window functions do three recurring district jobs. ", kbd("ROW_NUMBER"), " picks one row ",
+    "per student (the latest enrollment, the most recent test). ", kbd("LAG"), " puts last year ",
+    "beside this year. A windowed ", kbd("SUM"), " keeps a running total through the year."),
+  dsql_code("SELECT school_id, school_year,\n       COUNT(*) AS students,\n       COUNT(*) - LAG(COUNT(*)) OVER (PARTITION BY school_id\n                                      ORDER BY school_year) AS change\nFROM oct1_snapshot\nGROUP BY school_id, school_year\nORDER BY school_id, school_year;"),
+  dsql_editor("dzwin1", "SELECT school_id, school_year,\n       COUNT(*) AS students,\n       COUNT(*) - LAG(COUNT(*)) OVER (PARTITION BY school_id\n                                      ORDER BY school_year) AS change\nFROM oct1_snapshot\nGROUP BY school_id, school_year\nORDER BY school_id, school_year;"),
+  p(style = "line-height:1.6;",
+    "The year-over-year comparison uses the frozen snapshots on both sides, deliberately: each year ",
+    "as it was reported. ", kbd("LAG(COUNT(*))"), " is a window over the grouped result, which is ",
+    "allowed because windows run after ", kbd("GROUP BY"), " (the ribbon above)."),
+  callout_warm(tags$b("ROW_NUMBER for “the latest,” with a tiebreaker. "),
+    "Students who moved schools have two 2026 enrollments; the newer is the one that says where ",
+    "they are now. Order by ", kbd("start_date DESC, enrollment_id DESC"), " so two rows with the ",
+    "same date cannot trade places between runs."),
+  tsql_note("SELECT student_id, school_id\nFROM (SELECT student_id, school_id,\n             ROW_NUMBER() OVER (PARTITION BY student_id\n                                ORDER BY start_date DESC, enrollment_id DESC) AS rn\n      FROM dbo.enrollments\n      WHERE school_year = 2026 AND service_type = 'P') AS latest\nWHERE rn = 1;",
+    "Identical except that SQL Server requires an alias on a subquery in ", kbd("FROM"),
+    " (", kbd("AS latest"), "); SQLite does not."),
+  district_quest(WIN_DQUEST, "dzwinq", "Five district windows")
+)
+
+# ---- Changing data (writing, district copy) -----------------------------------
+CHANGING_DTASKS <- list(
+  list(prompt = paste0("Fix the typo: student 100689's 2026 enrollment has grade '9'. Update it to '09' (change ",
+                       "only the row whose grade is '9')."),
+       verify = "SELECT grade FROM enrollments WHERE student_id = 100689 AND school_year = 2026 ORDER BY enrollment_id;",
+       solution = "UPDATE enrollments\nSET grade = '09'\nWHERE student_id = 100689\n  AND grade = '9';"),
+  list(prompt = paste0("Student 100932 moved from Lakeview (70) to Horizon (90); Lakeview never ended its ",
+                       "enrollment. End it: end_date '2026-03-10', end_status 'INTR', on the open Lakeview row only."),
+       verify = "SELECT school_id, end_date, end_status FROM enrollments WHERE student_id = 100932 AND school_year = 2026 ORDER BY school_id;",
+       solution = "UPDATE enrollments\nSET end_date = '2026-03-10',\n    end_status = 'INTR'\nWHERE student_id = 100932\n  AND school_id = 70\n  AND end_date IS NULL;"),
+  list(prompt = paste0("Delete the attendance rows recorded on days that were not school days at that school ",
+                       "(instructional = 0 in calendar_days)."),
+       verify = "SELECT COUNT(*) AS on_non_school_days FROM attendance a JOIN calendar_days c ON c.school_id = a.school_id AND c.cal_date = a.att_date WHERE c.instructional = 0;",
+       solution = "DELETE FROM attendance\nWHERE EXISTS (\n  SELECT 1 FROM calendar_days AS c\n  WHERE c.school_id = attendance.school_id\n    AND c.cal_date = attendance.att_date\n    AND c.instructional = 0);"),
+  list(prompt = paste0("Student 100679 starts evening credit recovery at Horizon. Insert a secondary enrollment: ",
+                       "enrollment_id 9001, student_id 100679, school_id 90, school_year 2026, grade '11', start_date ",
+                       "'2026-03-31', end_date NULL, start_status 'CONT', end_status NULL, service_type 'S'."),
+       verify = "SELECT student_id, school_id, grade, start_date, end_date, service_type FROM enrollments WHERE enrollment_id = 9001;",
+       solution = "INSERT INTO enrollments (enrollment_id, student_id, school_id, school_year, grade,\n                         start_date, end_date, start_status, end_status, service_type)\nVALUES (9001, 100679, 90, 2026, '11', '2026-03-31', NULL, 'CONT', NULL, 'S');"),
+  list(prompt = "The state assigned student 102302 a state ID: set state_id to '0999999999'.",
+       verify = "SELECT state_id FROM students WHERE student_id = 102302;",
+       solution = "UPDATE students\nSET state_id = '0999999999'\nWHERE student_id = 102302;")
+)
+
+dsec_changing <- function() district_section(
+  "Correcting student records: fix the source, in a transaction",
+  p(style = "line-height:1.6;",
+    "Reporting analysts mostly read data, but the fix for a data problem belongs in the source ",
+    "system, not in an extract or a spreadsheet, so every later report agrees. In a real SIS ",
+    "the correction is usually made through the application by the school's records staff. The ",
+    "statements are the same ones the application runs, and knowing them is how you write a ",
+    "precise request: which row, which column, which value."),
+  scratch_reset_bar("dchg_reset", "dchg_reset_msg"),
+  p(style = "line-height:1.6;",
+    "This is a ", tags$b("separate private copy of the district database"), ", with its own Reset. ",
+    "A transfer is two changes that must happen together: end the old enrollment, start the new ",
+    "one. A transaction makes them one change. Run each statement in order:"),
+  dsql_code("BEGIN;\nUPDATE enrollments\nSET end_date = '2026-01-30', end_status = 'UNKN'\nWHERE student_id = 100283 AND end_date IS NULL;\nCOMMIT;"),
+  dsql_editor("dzchg1", "BEGIN;"),
+  dsql_editor("dzchg2", "UPDATE enrollments\nSET end_date = '2026-01-30', end_status = 'UNKN'\nWHERE student_id = 100283 AND end_date IS NULL;"),
+  dsql_editor("dzchg3", "COMMIT;"),
+  dsql_editor("dzchg4", "SELECT enrollment_id, school_id, start_date, end_date, end_status\nFROM enrollments\nWHERE student_id = 100283 AND school_year = 2026;"),
+  callout_warm(tags$b("Write the WHERE first. "),
+    "Before any UPDATE or DELETE on student data, run the same ", kbd("WHERE"), " as a ",
+    kbd("SELECT"), " and count the rows. ", kbd("UPDATE enrollments SET end_status = 'UNKN'"),
+    " without a ", kbd("WHERE"), " changes 7,463 rows."),
+  tsql_note("BEGIN TRANSACTION;\nUPDATE dbo.enrollments\nSET end_date = '2026-01-30', end_status = 'UNKN'\nWHERE student_id = 100283 AND end_date IS NULL;\n-- check @@ROWCOUNT, then\nCOMMIT TRANSACTION;   -- or ROLLBACK TRANSACTION",
+    kbd("@@ROWCOUNT"), " holds the number of rows the last statement changed; checking it before ",
+    "committing catches a WHERE clause that matched more than you meant."),
+  div(class = "mt-4",
+      style = "background:#fff; border-radius:10px; border:1px solid #cfe9df; padding:18px 18px 8px 18px;",
+      div(style = sprintf("color:%s; font-weight:700; letter-spacing:0.05em; font-size:11px; text-transform:uppercase;", D_PAL$acc),
+          "Now you try, on the district copy"),
+      h4("Five corrections", style = "margin:4px 0 8px 0;"),
+      p(style = sprintf("color:%s; font-size:13px; font-style:italic;", D_PAL$fg),
+        "Run your statement, then ", tags$b("Check my answer"), ", which inspects the copy. ",
+        "Each fixes a problem the Data quality tab finds."),
+      quest_editors_ui(CHANGING_DTASKS, "dzchgq"))
+)
+
+# ---- Tables (writing, district copy) -------------------------------------------
+TABLES_DTASKS <- list(
+  list(prompt = paste0("Put the October 1 count definition in the database: create a view ",
+                       "v_enrolled_oct1_2025 with student_id, school_id, grade for primary enrollments open on ",
+                       "2025-10-01."),
+       verify = "SELECT COUNT(*) AS n FROM v_enrolled_oct1_2025;",
+       solution = "CREATE VIEW v_enrolled_oct1_2025 AS\nSELECT student_id, school_id, grade\nFROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2025-10-01'\n  AND (end_date IS NULL OR end_date >= '2025-10-01');"),
+  list(prompt = paste0("Freeze the mid-year count: create a table enrolled_2026_01_15 (CREATE TABLE ... AS) with ",
+                       "student_id, school_id, grade for primary enrollments open on 2026-01-15."),
+       verify = "SELECT COUNT(*) AS n FROM enrolled_2026_01_15;",
+       solution = "CREATE TABLE enrolled_2026_01_15 AS\nSELECT student_id, school_id, grade\nFROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2026-01-15'\n  AND (end_date IS NULL OR end_date >= '2026-01-15');"),
+  list(prompt = paste0("Create school_contacts: school_id INTEGER PRIMARY KEY referencing schools(school_id), ",
+                       "contact_email TEXT NOT NULL with CHECK (contact_email LIKE '%@%'), and phone TEXT."),
+       verify = "SELECT name, \"notnull\", pk FROM pragma_table_info('school_contacts') ORDER BY cid;",
+       solution = "CREATE TABLE school_contacts (\n  school_id     INTEGER PRIMARY KEY REFERENCES schools(school_id),\n  contact_email TEXT NOT NULL CHECK (contact_email LIKE '%@%'),\n  phone         TEXT\n);"),
+  list(prompt = "Speed up date lookups on attendance: create an index named idx_attendance_date on attendance (att_date).",
+       verify = "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_attendance_date';",
+       solution = "CREATE INDEX idx_attendance_date ON attendance (att_date);"),
+  list(prompt = paste0("Create a view v_riverside_current for one audience: student_id and grade of primary ",
+                       "enrollments open on 2026-03-31 at school_id 80 only."),
+       verify = "SELECT COUNT(*) AS n FROM v_riverside_current;",
+       solution = "CREATE VIEW v_riverside_current AS\nSELECT student_id, grade\nFROM enrollments\nWHERE school_id = 80\n  AND service_type = 'P'\n  AND start_date <= '2026-03-31'\n  AND (end_date IS NULL OR end_date >= '2026-03-31');")
+)
+
+dsec_tables <- function() district_section(
+  "Definitions that live in the database",
+  p(style = "line-height:1.6;",
+    "A definition written in five reports drifts into five definitions. Written once as a view, ",
+    "every report that selects from it agrees, and changing the definition is one edit. The same ",
+    "goes for a frozen copy of today's data (", kbd("CREATE TABLE ... AS"), "), and for rules the ",
+    "database should enforce (constraints) rather than leave for the Data quality tab to find."),
+  p(style = "line-height:1.6;",
+    "These run on the district's private copy (the Reset is on the Changing data tab's district ",
+    "section; it resets the district copy for both tabs)."),
+  dsql_code("CREATE VIEW v_current_enrollment AS\nSELECT student_id, school_id, grade\nFROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2026-03-31'\n  AND (end_date IS NULL OR end_date >= '2026-03-31');"),
+  dsql_editor("dztab1", "CREATE VIEW v_current_enrollment AS\nSELECT student_id, school_id, grade\nFROM enrollments\nWHERE service_type = 'P'\n  AND start_date <= '2026-03-31'\n  AND (end_date IS NULL OR end_date >= '2026-03-31');"),
+  dsql_editor("dztab2", "SELECT school_id, COUNT(*) AS students\nFROM v_current_enrollment\nGROUP BY school_id;"),
+  help_details("A view is a query, not a copy",
+    tagList("Selecting from ", kbd("v_current_enrollment"), " runs its query against today's ",
+      "data every time; it stores nothing. A ", kbd("CREATE TABLE ... AS"), " stores the rows as ",
+      "they were when it ran, which is what a snapshot is. Districts need both: views for ",
+      "definitions, tables for records of what was reported.")),
+  tsql_note("CREATE VIEW dbo.v_current_enrollment AS\nSELECT student_id, school_id, grade\nFROM dbo.enrollments\nWHERE service_type = 'P'\n  AND start_date <= CAST(GETDATE() AS date)\n  AND (end_date IS NULL OR end_date >= CAST(GETDATE() AS date));\n\n-- A frozen copy in SQL Server:\nSELECT student_id, school_id, grade\nINTO dbo.enrolled_2026_03_31\nFROM dbo.v_current_enrollment;",
+    "In production the view would use today's date; here it cannot, because the data stops on ",
+    "2026-03-31. SQL Server freezes with ", kbd("SELECT ... INTO"), " rather than ",
+    kbd("CREATE TABLE ... AS"), "."),
+  div(class = "mt-4",
+      style = "background:#fff; border-radius:10px; border:1px solid #cfe9df; padding:18px 18px 8px 18px;",
+      div(style = sprintf("color:%s; font-weight:700; letter-spacing:0.05em; font-size:11px; text-transform:uppercase;", D_PAL$acc),
+          "Now you try, on the district copy"),
+      h4("Five definitions and structures", style = "margin:4px 0 8px 0;"),
+      quest_editors_ui(TABLES_DTASKS, "dztabq"))
+)
+
+# ---- Put it together ----------------------------------------------------------
+CAPSTONE_DQUEST <- list(
+  list(prompt = paste0("Students enrolled today (primary, open on 2026-03-31) by school_name, with the share who ",
+                       "are English learners today (EL spell covering 2026-03-31), rounded to 3: return school_name, ",
+                       "students, el_share."),
+       ref = "WITH cur AS (SELECT DISTINCT e.student_id, e.school_id FROM enrollments e WHERE e.service_type = 'P' AND e.start_date <= '2026-03-31' AND (e.end_date IS NULL OR e.end_date >= '2026-03-31')), el AS (SELECT DISTINCT student_id FROM programs WHERE program = 'EL' AND start_date <= '2026-03-31' AND (end_date IS NULL OR end_date >= '2026-03-31')) SELECT sc.school_name, COUNT(*) AS students, ROUND(AVG(CASE WHEN el.student_id IS NOT NULL THEN 1.0 ELSE 0 END), 3) AS el_share FROM cur JOIN schools sc ON sc.school_id = cur.school_id LEFT JOIN el ON el.student_id = cur.student_id GROUP BY sc.school_name;",
+       solution = "WITH current_students AS (\n  SELECT DISTINCT e.student_id, e.school_id\n  FROM enrollments AS e\n  WHERE e.service_type = 'P'\n    AND e.start_date <= '2026-03-31'\n    AND (e.end_date IS NULL OR e.end_date >= '2026-03-31')\n),\nel_now AS (\n  SELECT DISTINCT student_id FROM programs\n  WHERE program = 'EL' AND start_date <= '2026-03-31'\n    AND (end_date IS NULL OR end_date >= '2026-03-31')\n)\nSELECT sc.school_name,\n       COUNT(*) AS students,\n       ROUND(AVG(CASE WHEN el.student_id IS NOT NULL THEN 1.0 ELSE 0 END), 3) AS el_share\nFROM current_students AS cur\nJOIN schools AS sc ON sc.school_id = cur.school_id\nLEFT JOIN el_now AS el ON el.student_id = cur.student_id\nGROUP BY sc.school_name;"),
+  list(prompt = paste0("Number of distinct courses each 2026 S1 student at Lakeview (school_id 70) failed (mark ",
+                       "'F'), for students who failed at least two: return student_id and failures."),
+       ref = "SELECT student_id, COUNT(DISTINCT course_id) AS failures FROM transcripts WHERE school_year = 2026 AND term = 'S1' AND school_id = 70 AND mark = 'F' GROUP BY student_id HAVING COUNT(DISTINCT course_id) >= 2;",
+       solution = "SELECT student_id, COUNT(DISTINCT course_id) AS failures\nFROM transcripts\nWHERE school_year = 2026\n  AND term = 'S1'\n  AND school_id = 70\n  AND mark = 'F'\nGROUP BY student_id\nHAVING COUNT(DISTINCT course_id) >= 2;"),
+  list(prompt = paste0("For each 2026 incident type, the share of incidents that led to at least one out-of-school ",
+                       "suspension (OSS), rounded to 3: return incident_type, incidents, share_oss. This year = ",
+                       "incident_date on or after 2025-07-01."),
+       ref = "SELECT i.incident_type, COUNT(*) AS incidents, ROUND(AVG(CASE WHEN EXISTS (SELECT 1 FROM resolutions r WHERE r.incident_id = i.incident_id AND r.resolution_code = 'OSS') THEN 1.0 ELSE 0 END), 3) AS share_oss FROM incidents i WHERE i.incident_date >= '2025-07-01' GROUP BY i.incident_type;",
+       solution = "SELECT i.incident_type,\n       COUNT(*) AS incidents,\n       ROUND(AVG(CASE WHEN EXISTS (SELECT 1 FROM resolutions AS r\n                                   WHERE r.incident_id = i.incident_id\n                                     AND r.resolution_code = 'OSS')\n                      THEN 1.0 ELSE 0 END), 3) AS share_oss\nFROM incidents AS i\nWHERE i.incident_date >= '2025-07-01'\nGROUP BY i.incident_type;"),
+  list(prompt = paste0("Kindergarten size by year from the frozen snapshots, with the previous year's beside it: ",
+                       "return school_year, kindergarten, previous_year (LAG; NULL for the first year)."),
+       ref = "SELECT school_year, SUM(CASE WHEN grade = 'KG' THEN 1 ELSE 0 END) AS kindergarten, LAG(SUM(CASE WHEN grade = 'KG' THEN 1 ELSE 0 END)) OVER (ORDER BY school_year) AS previous_year FROM oct1_snapshot GROUP BY school_year;",
+       solution = "SELECT school_year,\n       SUM(CASE WHEN grade = 'KG' THEN 1 ELSE 0 END) AS kindergarten,\n       LAG(SUM(CASE WHEN grade = 'KG' THEN 1 ELSE 0 END)) OVER (ORDER BY school_year) AS previous_year\nFROM oct1_snapshot\nGROUP BY school_year;"),
+  list(prompt = paste0("Students with an open primary enrollment today whose most recent attendance row is an ",
+                       "unexcused full-day absence (status 'A', excuse 'U') on 2026-03-31: return student_id, once each."),
+       ref = "SELECT DISTINCT a.student_id FROM attendance a WHERE a.att_date = '2026-03-31' AND a.status = 'A' AND a.excuse = 'U' AND EXISTS (SELECT 1 FROM enrollments e WHERE e.student_id = a.student_id AND e.service_type = 'P' AND e.end_date IS NULL);",
+       solution = "SELECT DISTINCT a.student_id\nFROM attendance AS a\nWHERE a.att_date = '2026-03-31'\n  AND a.status = 'A'\n  AND a.excuse = 'U'\n  AND EXISTS (SELECT 1 FROM enrollments AS e\n              WHERE e.student_id = a.student_id\n                AND e.service_type = 'P'\n                AND e.end_date IS NULL);")
+)
+
+dsec_capstone <- function() district_section(
+  "Five mixed questions on the district",
+  p(style = "line-height:1.6;",
+    "The institute challenges above mix clauses; these mix them on district data, where the ",
+    "decisions about dates, units, and populations come along with the syntax. For fifteen more, ",
+    "written as the requests a district data team receives, and interview scenarios to talk ",
+    "through, see ", tags$b("District challenges"), " under the School district menu."),
+  district_quest(CAPSTONE_DQUEST, "dzcapq", "Five mixed district questions")
+)
+
+# ---- Start here ---------------------------------------------------------------
+dsec_start <- function() div(class = "p-4 my-4",
+  style = sprintf("background:%s; border-radius:14px; border-top:6px solid %s;", D_PAL$bg, D_PAL$acc),
+  div(style = sprintf("font-weight:700; letter-spacing:0.06em; text-transform:uppercase; font-size:12px; color:%s; margin-bottom:6px;", D_PAL$acc),
+      "A second database"),
+  h3("And a school district, for when the clauses are second nature", style = "margin:0 0 10px 0;"),
+  p(style = "line-height:1.6; max-width:860px;",
+    "Each query tab ends with an ", tags$b("In a school district"), " section that applies its ",
+    "clause to ", tags$b(DISTRICT_NAME), ", a fictional district whose tables have the shape of a ",
+    "real student information system: nine schools, five school years, enrollment spells, ",
+    "attendance, programs, behavior, transcripts, test results, and the files a district sends the ",
+    "state. The ", tags$b("School district"), " menu has seven more tabs on the problems that only ",
+    "school data has: October 1 counts, attendance rates, discipline and student groups, ",
+    "graduation cohorts, and data quality. Pink boxes show the SQL Server (T-SQL) version of a ",
+    "query, since that is what most districts run."),
+  p(style = "line-height:1.6; max-width:860px; margin-bottom:0;",
+    "The institute is still the place to learn each clause: its tables are small enough that you ",
+    "can see what a query did. The district is where the same clause meets dates, codes, and ",
+    "several rows per student."),
+  help_details("The district's tables", district_schema_explorer())
+)

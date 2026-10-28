@@ -97,5 +97,23 @@ for (cl in claims) {
   if (!okk) { bad <- bad + 1; cat(sprintf("MISMATCH [%s] %s: prose says %s, database says %s\n", cl[1], cl[2], cl[4], format(got))) }
 }
 dbDisconnect(con)
-cat(sprintf("%d claims checked, %d mismatch(es)\n", length(claims), bad))
+n_claims <- length(claims)
+
+# ---- The district database ----------------------------------------------------
+# Claims made by the "In a school district" sections and the School district
+# tabs. ATT is the per-student attendance computation the Attendance tab
+# teaches, reused so the numbers it quotes are checked the way it computes them.
+con <- dbConnect(SQLite(), "data/district.sqlite", flags = SQLITE_RO)
+ATT <- "WITH enrolled_days AS (SELECT e.student_id, e.school_id, c.cal_date FROM enrollments e JOIN calendar_days c ON c.school_id = e.school_id AND c.instructional = 1 AND c.cal_date >= e.start_date AND c.cal_date <= COALESCE(e.end_date, '2026-03-31') WHERE e.school_year = 2026 AND e.service_type = 'P' AND c.cal_date <= '2026-03-31'), absence AS (SELECT student_id, school_id, att_date, CASE WHEN excuse = 'X' THEN 0 WHEN status = 'A' THEN 1.0 WHEN status = 'H' THEN 0.5 ELSE 0 END AS days_absent FROM attendance), per_student AS (SELECT d.student_id, d.school_id, COUNT(*) AS days_enrolled, COALESCE(SUM(a.days_absent), 0) AS days_absent FROM enrolled_days d LEFT JOIN absence a ON a.student_id = d.student_id AND a.school_id = d.school_id AND a.att_date = d.cal_date GROUP BY d.student_id, d.school_id) "
+OCT1 <- "service_type = 'P' AND start_date <= '2025-10-01' AND (end_date IS NULL OR end_date >= '2025-10-01')"
+OCT1E <- "e.service_type = 'P' AND e.start_date <= '2025-10-01' AND (e.end_date IS NULL OR e.end_date >= '2025-10-01')"
+source(file.path("tests", "district_claims.R"), local = TRUE)   # defines district_claims
+for (cl in district_claims) {
+  got <- tryCatch(one(cl[3]), error = function(e) paste("ERROR:", conditionMessage(e)))
+  okk <- isTRUE(all.equal(as.numeric(got), as.numeric(cl[4]), tolerance = 1e-6))
+  if (!okk) { bad <- bad + 1; cat(sprintf("MISMATCH [district %s] %s: prose says %s, database says %s\n", cl[1], cl[2], cl[4], format(got))) }
+}
+dbDisconnect(con)
+cat(sprintf("%d claims checked (%d institute, %d district), %d mismatch(es)\n",
+            n_claims + length(district_claims), n_claims, length(district_claims), bad))
 quit(status = if (bad) 1 else 0)

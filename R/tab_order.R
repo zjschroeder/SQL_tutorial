@@ -78,6 +78,9 @@ source_order_server <- function(input, output, session) {
 
   wire_demo_editors("osed", 5, input, output, session)
   wire_quest_editors(ORDER_QUEST, "ordq", input, output, session)
+  # The "In a school district" section (R/district_sections.R)
+  wire_demo_editors("dzord", 1, input, output, session, con_fun = district_con_ro)
+  wire_quest_editors(ORDER_DQUEST, "dzordq", input, output, session, con_fun = district_con_ro)
 
   output$order_tab_ui <- renderUI({
     div(class = "container-fluid", style = "max-width: 1380px; padding-top: 16px;",
@@ -295,7 +298,8 @@ source_order_server <- function(input, output, session) {
                 "tiebreaker, use it. Elsewhere in the tutorial the grader is indifferent ",
                 "to order; here it is the whole point.")),
             quest_editors_ui(ORDER_QUEST, "ordq")
-          ))
+          ),
+          dsec_order())
         )
       )
     )
