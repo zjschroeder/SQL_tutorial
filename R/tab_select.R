@@ -60,7 +60,7 @@ SELECT_QUEST <- list(
 
 SELECT_STEP_TITLES <- c(
   "SELECT columns FROM a table",
-  "SELECT * (all columns)",
+  "SELECT *, and what tables exist",
   "Rename with AS",
   "DISTINCT: drop duplicates",
   "Compute new columns"
@@ -97,9 +97,9 @@ source_select_server <- function(input, output, session) {
   })
 
   # Wire the in-step "try it" editors (Run only).
-  wire_demo_editors("seled", 5, input, output, session)
+  wire_demo_editors("seled", 7, input, output, session)
   # The "In a school district" section (R/district_sections.R)
-  wire_demo_editors("dzsel", 1, input, output, session, con_fun = district_con_ro)
+  wire_demo_editors("dzsel", 2, input, output, session, con_fun = district_con_ro)
   wire_quest_editors(SELECT_DQUEST, "dzselq", input, output, session, con_fun = district_con_ro)
 
   # Wire the 10 quest editors. Each computes its expected set by running its
@@ -144,16 +144,16 @@ source_select_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "SELECT columns FROM a table",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A ", tags$code("SELECT"), " statement names a ",
                 tags$em("projection"), " (the columns to keep) and a ",
                 tags$code("FROM"), " clause naming the source relation. The result ",
                 "is a new relation with the same rows and only the chosen columns."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Say which columns you want and which table they live in. ",
                 "You get back a table with just those columns and every row. ",
                 "In practical terms, this is the least a database will ever ask of you."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("SELECT lab_name FROM labs"), " returns the six lab names, ",
                 "from the Avian Intimidation Lab to the Bioacoustics & Thermometry Lab. ",
                 "Swap in ", kbd("full_name"), " and ", kbd("researchers"),
@@ -184,18 +184,18 @@ source_select_server <- function(input, output, session) {
 
           # ===== STEP 2 =====
           conditionalPanel("output.select_step >= 2",
-          step_container(2, "SELECT * — every column",
+          step_container(2, "SELECT *, and finding what tables and columns exist",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "The wildcard ", tags$code("*"), " projects all columns of the ",
                 "source relation, in their defined order. Convenient for ",
                 "exploration; discouraged in durable queries because the result ",
                 "shape silently changes if the table's columns change."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("*"), " means “give me everything.” Use it for a first look at ",
                 "an unfamiliar table, not in a query you intend to keep; the ",
                 "collapsible below says why."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("SELECT * FROM studies"), " shows all seven columns of all ",
                 "ten studies, including the one titled “Abandoned: telepathy in lab ",
                 "crickets,” which is the fastest way to learn what kind of ",
@@ -210,6 +210,35 @@ source_select_server <- function(input, output, session) {
                 "somewhere far from the query that caused it. Naming columns explicitly ",
                 "keeps a query's output stable. It also documents what you actually ",
                 "wanted, which you will appreciate when you reread it.")),
+            h5(class = "mt-4", "What tables and columns are there? Ask the database"),
+            p(style = "line-height:1.6;",
+              kbd("SELECT *"), " shows you a table you already know about. To find the tables in the ",
+              "first place, or to check a column's exact name, query the database's own ",
+              tags$b("catalog"), ": every database keeps a list of what it contains, and you read it ",
+              "with an ordinary ", kbd("SELECT"), ". In SQLite the list of tables is ",
+              kbd("sqlite_master"), ":"),
+            sql_code("SELECT type, name\nFROM sqlite_master;"),
+            sql_editor("seled6", starter = "SELECT type, name\nFROM sqlite_master;"),
+            p(style = "line-height:1.6;",
+              "You get ten rows: the six tables, plus four ", tags$em("indexes"), " (lookup aids the ",
+              "database built to speed up searches; the Tables tab covers them). The ", kbd("type"),
+              " column tells them apart. For the columns of one table, name the table inside ",
+              kbd("pragma_table_info('...')"), " in the ", kbd("FROM"), " clause, quotes included:"),
+            sql_code("SELECT name, type, pk\nFROM pragma_table_info('studies');"),
+            sql_editor("seled7", starter = "SELECT name, type, pk\nFROM pragma_table_info('studies');"),
+            p(style = "line-height:1.6;",
+              "One row per column: its ", kbd("name"), ", the ", kbd("type"), " of value it holds ",
+              "(", kbd("INTEGER"), ", ", kbd("TEXT"), ", ...), and ", kbd("pk"), ", which is 1 for the ",
+              "primary key and 0 otherwise. Change ", kbd("'studies'"), " to any table name. Both ",
+              "queries work in every editor in this tutorial, so when you forget a column name, ",
+              "you can look it up where you are instead of scrolling back to the Start tab."),
+            help_details("The same lookups in SQL Server, PostgreSQL, and MySQL",
+              tagList("The catalog's name is the main thing that differs between databases. Most ",
+                "follow the SQL standard's ", kbd("INFORMATION_SCHEMA"), " views:",
+                tags$pre(style = "background:#f6fafb; padding:8px 10px; border-radius:6px; margin:8px 0; font-size:12.5px;",
+                  "SELECT TABLE_SCHEMA, TABLE_NAME\nFROM INFORMATION_SCHEMA.TABLES;\n\nSELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = 'studies';"),
+                "SQL Server also has a one-line shortcut, ", kbd("EXEC sp_help 'studies';"), ". On a job ",
+                "with an unfamiliar warehouse, these are the first queries to run.")),
             continue_button("select_continue2"),
             id_prefix = "select-step"
           )),
@@ -218,15 +247,15 @@ source_select_server <- function(input, output, session) {
           conditionalPanel("output.select_step >= 3",
           step_container(3, "Rename output columns with AS",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "An ", tags$code("AS"), " clause assigns an ", tags$em("alias"),
                 " to a projected column (or, later, a table). The alias names the ",
                 "output column; the underlying data is unchanged."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Relabel a column in the result. Useful when a column name is ",
                 "cryptic, and necessary when you compute something new and it ",
                 "needs a name that isn't the formula itself."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("SELECT lab_name AS name FROM labs"),
                 " returns the same six names; only the column header changes, to ",
                 kbd("name"), ". The labs themselves remain unrenamed, and probably ",
@@ -253,16 +282,16 @@ source_select_server <- function(input, output, session) {
           conditionalPanel("output.select_step >= 4",
           step_container(4, "DISTINCT — collapse duplicate rows",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("DISTINCT"), " removes duplicate rows from the result, ",
                 "keeping one of each unique combination of the selected columns. ",
                 "With several columns it dedupes on the whole ", tags$em("combination"),
                 ", not each column separately."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "“Show me each value once.” This is how you answer “what are the ",
                 "possible categories here?” without reading the whole column and ",
                 "counting on your fingers."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The ", kbd("researchers"), " table has twelve rows but only four ",
                 "job titles. ", kbd("SELECT DISTINCT title FROM researchers"),
                 " returns just PI, Grad Student, Postdoc, RA. (Try it on ",
@@ -288,16 +317,16 @@ source_select_server <- function(input, output, session) {
           conditionalPanel("output.select_step >= 5",
           step_container(5, "Compute new columns in SELECT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "The select list may contain ", tags$em("expressions"),
                 " (arithmetic, string operations, function calls, literals) ",
                 "evaluated per row. These computed columns usually get an ",
                 tags$code("AS"), " alias."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "You are not limited to columns that already exist. Do arithmetic ",
                 "on the ones that do and return the answer as a new column, named ",
                 "with ", kbd("AS"), " so the header isn't a formula."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("salary * 1.03 AS after_raise"), " shows what a 3% raise would ",
                 "cost the institute, person by person. A ", kbd("NULL"),
                 " salary times anything is still ", kbd("NULL"), ": two researchers ",

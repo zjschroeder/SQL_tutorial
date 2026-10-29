@@ -122,17 +122,17 @@ source_joins_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Why join: keys and INNER JOIN",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "An ", tags$code("INNER JOIN"), " pairs each row of one relation ",
                 "with rows of another that satisfy the ", tags$code("ON"),
                 " predicate (typically foreign key = primary key), emitting the ",
                 "matched combinations. Unmatched rows are excluded."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Tell SQL which column in table A points at which column in table B. ",
                 "You get back the rows that match up, side by side. Rows with no ",
                 "partner on the other side are left out, which is sometimes ",
                 "what you want and sometimes the beginning of a long afternoon."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("studies.lab_id → labs.lab_id"), " is the wiring. ",
                 kbd("studies JOIN labs ON studies.lab_id = labs.lab_id"),
                 " gives each of the ten studies its lab's details, so “Do seagulls ",
@@ -164,17 +164,17 @@ source_joins_server <- function(input, output, session) {
           conditionalPanel("output.joins_step >= 2",
           step_container(2, "Qualify columns; table aliases",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "When tables share a column name (both have ", tags$code("lab_id"),
                 "), references must be qualified as ", tags$code("table.column"),
                 ". A table alias (", tags$code("studies s"),
                 ") shortens those qualifications and is required for self-joins."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Give each table a short nickname and prefix shared column names ",
                 "with it, so SQL knows which ", kbd("lab_id"), " you mean. One-letter ",
                 "aliases (", kbd("s"), ", ", kbd("l"), ") are the convention. Nobody ",
                 "will admire a longer one."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("FROM studies s JOIN labs l ON s.lab_id = l.lab_id"),
                 ", and from then on you write ", kbd("s.title"), " and ", kbd("l.lab_name"), ".")
             ),
@@ -207,16 +207,16 @@ source_joins_server <- function(input, output, session) {
           conditionalPanel("output.joins_step >= 3",
           step_container(3, "LEFT JOIN and finding what's missing",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A ", tags$code("LEFT JOIN"), " keeps every row of the left relation; ",
                 "where the right has no match, its columns are ", tags$code("NULL"),
                 ". Filtering ", tags$code("WHERE right_key IS NULL"),
                 " yields the anti-join: left rows with no partner."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "“Keep everyone on the left, matched or not.” The unmatched ones get ",
                 "NULLs on the right, and those NULLs are exactly how you ",
                 tags$em("find"), " the unmatched ones: LEFT JOIN, then look for the NULLs."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Dr. Wanda Roams has a ", kbd("NULL"), " lab_id (she is, per the name, ",
                 "between labs). An ", kbd("INNER JOIN"),
                 " drops her; a ", kbd("LEFT JOIN"), " keeps her, lab_name NULL. ",
@@ -244,19 +244,19 @@ source_joins_server <- function(input, output, session) {
           conditionalPanel("output.joins_step >= 4",
           step_container(4, "The LEFT-to-INNER filter trap",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A predicate on the right table placed in ", tags$code("WHERE"),
                 " is applied ", tags$em("after"), " the join, rejecting the ",
                 "NULL-filled rows and silently demoting a ", tags$code("LEFT JOIN"),
                 " to an ", tags$code("INNER JOIN"), ". To keep them, put the ",
                 "condition in the ", tags$code("ON"), " clause instead."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "You LEFT JOIN to keep the unmatched rows, then filter the right ",
                 "table in WHERE, and you have thrown those rows straight back out, ",
                 "because NULL fails almost every test (recall the WHERE tab). ",
                 "The query still runs. It answers a different question than the ",
                 "one you asked."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("LEFT JOIN ... WHERE l.building = 'Wexler Hall'"),
                 " discards Dr. Roams (her building is NULL, and NULL is not ",
                 "Wexler Hall), so you are back to an inner join without having typed one.")
@@ -278,17 +278,17 @@ source_joins_server <- function(input, output, session) {
           conditionalPanel("output.joins_step >= 5",
           step_container(5, "Row multiplication; many tables",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "In a one-to-many join, each left row is emitted once per matching ",
                 "right row, so result cardinality is the number of matched pairs, ",
                 "not the number of left rows. Joins chain: add another ",
                 tags$code("JOIN"), " to reach a third table."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Join a study to its many enrollments and the study's row repeats, ",
                 "once per enrollee. The repetition is correct: the join returns one ",
                 "row per pairing. A Venn diagram, the way joins are usually drawn, ",
                 "hides this entirely, which is why this tutorial has not shown you one."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("studies JOIN enrollments JOIN participants"),
                 " yields one row per enrolled participant, 89 in all, so the seagull ",
                 "study's title repeats once for each bird (and Dave) in it.")
@@ -312,21 +312,21 @@ source_joins_server <- function(input, output, session) {
           conditionalPanel("output.joins_step >= 6",
           step_container(6, "RIGHT, FULL OUTER, and CROSS JOIN",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A ", tags$code("RIGHT JOIN"), " keeps every row of the right relation, ",
                 "NULL-filling the left: a ", tags$code("LEFT JOIN"), " with its operands ",
                 "exchanged. A ", tags$code("FULL OUTER JOIN"), " keeps the unmatched rows ",
                 "of both. A ", tags$code("CROSS JOIN"), " has no ", tags$code("ON"),
                 " clause and returns the Cartesian product: every row of one relation ",
                 "paired with every row of the other."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("LEFT"), " and ", kbd("RIGHT"), " differ only in which table you ",
                 "happened to write first, so most people pick ", kbd("LEFT"),
                 " and reorder the tables when they need the other one. ", kbd("FULL OUTER"),
                 " is for reconciling two lists: everything in either, matched up where ",
                 "possible. ", kbd("CROSS JOIN"), " is every combination, which is rarely ",
                 "what you want and occasionally exactly what you want."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Every lab at the institute has at least one researcher, so here ",
                 kbd("researchers FULL OUTER JOIN labs"), " returns what the ",
                 kbd("LEFT JOIN"), " did: 12 rows, Dr. Roams and her NULLs included. The ",
@@ -364,18 +364,18 @@ source_joins_server <- function(input, output, session) {
           conditionalPanel("output.joins_step >= 7",
           step_container(7, "Self-joins: a table meets itself",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A self-join joins a relation to itself. The two occurrences must be ",
                 "given distinct aliases, after which they behave as two independent ",
                 "tables. The join predicate need not be an equality: ",
                 tags$code("<"), ", ", tags$code("<>"), ", and ranges are all permitted ",
                 "(a non-equi join)."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "To compare rows of a table with other rows of the same table, list the ",
                 "table twice under two names and join the copies. There is no ",
                 kbd("SELF JOIN"), " keyword; it is an ordinary ", kbd("JOIN"),
                 " in which both sides happen to be the same table."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Who shares a lab with whom? Join ", kbd("researchers a"), " to ",
                 kbd("researchers b"), " on ", kbd("lab_id"), " and you get 23 rows: every ",
                 "pair twice (Albatross–Tern, then Tern–Albatross) and each of the eleven ",

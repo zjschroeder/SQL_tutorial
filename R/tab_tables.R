@@ -145,7 +145,7 @@ source_tables_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "CREATE TABLE and data types",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("CREATE TABLE name (column type constraints, …)"),
                 " defines a relation. SQLite stores every value as one of five storage ",
                 "classes: ", tags$code("NULL"), ", ", tags$code("INTEGER"), ", ",
@@ -153,13 +153,13 @@ source_tables_server <- function(input, output, session) {
                 ". A column's declared type gives it an ", tags$em("affinity"),
                 ", a preferred class to which incoming values are converted when the ",
                 "conversion is lossless, and which is otherwise not enforced."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Name the table, then list each column with the kind of thing it holds: ",
                 "whole numbers, decimals, or text. SQLite has no separate types for dates ",
                 "or true/false; dates go in ", kbd("TEXT"), " (year first, as on the ",
                 "Functions tab) and booleans go in ", kbd("INTEGER"), " as 0 and 1, which ",
                 "is what ", kbd("enrollments.dropped_out"), " has been all along."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The statement below makes a table for lab notes. An ",
                 kbd("INTEGER PRIMARY KEY"), " column numbers itself: leave ",
                 kbd("note_id"), " out of an ", kbd("INSERT"), " and SQLite supplies the ",
@@ -208,7 +208,7 @@ source_tables_server <- function(input, output, session) {
           conditionalPanel("output.tables_step >= 2",
           step_container(2, "Constraints: rules the table enforces",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A constraint is a condition every row must satisfy; a statement that ",
                 "would violate one fails, and changes nothing. ", tags$code("PRIMARY KEY"),
                 " identifies the row (unique, and conventionally not NULL). ",
@@ -216,13 +216,13 @@ source_tables_server <- function(input, output, session) {
                 " forbids duplicates. ", tags$code("CHECK (expr)"),
                 " requires the expression not to be false. ", tags$code("DEFAULT value"),
                 " supplies a value when an ", tags$code("INSERT"), " omits the column."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Rules you state once, in the table definition, and the database then ",
                 "applies to every insert and update from every source, forever. A rule ",
                 "in the table cannot be forgotten by a script written next year. If you ",
                 "have ever found a participant aged −3 in a dataset, you have met a table ",
                 "that lacked a ", kbd("CHECK"), "."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The institute's equipment register: an id, an item that must be named, ",
                 "a cost that cannot be negative, a serial number that cannot repeat, and a ",
                 "condition that is assumed to be ", kbd("'working'"), " unless someone says ",
@@ -270,7 +270,7 @@ source_tables_server <- function(input, output, session) {
           conditionalPanel("output.tables_step >= 3",
           step_container(3, "Foreign keys",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A ", tags$code("FOREIGN KEY"), " constraint (", tags$code("REFERENCES parent(column)"),
                 ") requires each non-NULL value in the child column to exist in the ",
                 "referenced parent column: referential integrity. Optional ",
@@ -278,13 +278,13 @@ source_tables_server <- function(input, output, session) {
                 " actions state what happens to children when the parent row changes. ",
                 "SQLite parses foreign keys always and enforces them only when ",
                 tags$code("PRAGMA foreign_keys = ON"), " has been issued on the connection."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "The Start tab called keys “the wiring.” A foreign key constraint is what ",
                 "stops anyone from wiring a study to lab 99 when there is no lab 99, or ",
                 "from deleting a lab that studies still point to. A NULL foreign key is ",
                 "allowed (it means “points at nothing,” as with Dr. Roams), unless the ",
                 "column is also ", kbd("NOT NULL"), "."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "All six of the institute's foreign keys are declared in its table definitions, ",
                 "and none has ever been enforced, because SQLite leaves enforcement off ",
                 "unless asked. The four statements below ask, and then attempt to delete ",
@@ -327,19 +327,19 @@ source_tables_server <- function(input, output, session) {
           conditionalPanel("output.tables_step >= 4",
           step_container(4, "ALTER TABLE and DROP TABLE",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("ALTER TABLE"), " modifies an existing table's definition. SQLite ",
                 "supports four forms: ", tags$code("ADD COLUMN"), ", ",
                 tags$code("RENAME COLUMN … TO …"), ", ", tags$code("DROP COLUMN"),
                 ", and ", tags$code("RENAME TO"), " (the table itself). ",
                 tags$code("DROP TABLE name"), " removes a table together with its rows, ",
                 "indexes, and triggers."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Tables change after they are born: a new column is needed, an old name ",
                 "turns out to be misleading. ", kbd("ALTER TABLE"), " does that in place, ",
                 "keeping the rows. A column added to a table that already has rows needs ",
                 "a value for them, so it is either nullable or has a ", kbd("DEFAULT"), "."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The institute has heard of preregistration. The statement below adds a ",
                 kbd("preregistered"), " flag to ", kbd("studies"),
                 ". All ten existing studies receive the default, 0, which in their case is ",
@@ -379,18 +379,18 @@ source_tables_server <- function(input, output, session) {
           conditionalPanel("output.tables_step >= 5",
           step_container(5, "Views",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A view is a named, stored query. ", tags$code("CREATE VIEW name AS SELECT …"),
                 " records the definition; the view is then queried like a table, and its ",
                 "rows are computed from the underlying tables each time. It stores no data ",
                 "of its own. ", tags$code("DROP VIEW name"), " removes the definition and ",
                 "affects no data."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "A CTE that outlives the query. If you find yourself pasting the same ",
                 "three-table join into the top of every analysis, give it a name once and ",
                 "select from the name. Because the view is re-run each time, it is never ",
                 "out of date, which a copied table would be by the following morning."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("study_overview"), " does the joins from the JOINs tab once: each study ",
                 "with its lab's name and its lead researcher's name, in place of two id ",
                 "numbers. Afterwards, “which ongoing studies does the Cinematic Dread Unit ",

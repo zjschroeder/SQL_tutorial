@@ -79,7 +79,7 @@ source_order_server <- function(input, output, session) {
   wire_demo_editors("osed", 5, input, output, session)
   wire_quest_editors(ORDER_QUEST, "ordq", input, output, session)
   # The "In a school district" section (R/district_sections.R)
-  wire_demo_editors("dzord", 1, input, output, session, con_fun = district_con_ro)
+  wire_demo_editors("dzord", 2, input, output, session, con_fun = district_con_ro)
   wire_quest_editors(ORDER_DQUEST, "dzordq", input, output, session, con_fun = district_con_ro)
 
   output$order_tab_ui <- renderUI({
@@ -107,17 +107,17 @@ source_order_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Sort with ORDER BY",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "An ", tags$code("ORDER BY"), " clause sorts the result by one or ",
                 "more sort keys, each ascending (", tags$code("ASC"), ", the ",
                 "default) or descending (", tags$code("DESC"), "). It is logically ",
                 "the last step before ", tags$code("LIMIT"), "."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Pick a column to sort by. Add ", kbd("DESC"), " for largest-first ",
                 "or newest-first; leave it off for smallest-first (A→Z, low→high). ",
                 "In practical terms, ", kbd("DESC"), " is the word you type when you ",
                 "want the winners on top."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("ORDER BY founded_year"), " lists labs oldest to newest, starting ",
                 "with the Bioacoustics & Thermometry Lab (1979); ",
                 kbd("ORDER BY salary DESC"), " puts Dr. Priya Eustachian on top at 121000.")
@@ -140,15 +140,15 @@ source_order_server <- function(input, output, session) {
           conditionalPanel("output.order_step >= 2",
           step_container(2, "Sort by several columns",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Listing multiple sort keys sorts by the first, breaking ties with ",
                 "the second, and so on. Each key carries its own ", tags$code("ASC"),
                 "/", tags$code("DESC"), "."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Sort by A; when two rows tie on A, sort those by B. Sorting a ",
                 "spreadsheet by one column and then a second as a tiebreaker is the ",
                 "same idea, minus the dialog box."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("ORDER BY status, year"), " groups studies by status (abandoned, ",
                 "completed, ongoing, alphabetically) and, within each status, lists ",
                 "them oldest to newest.")
@@ -182,15 +182,15 @@ source_order_server <- function(input, output, session) {
           conditionalPanel("output.order_step >= 3",
           step_container(3, "Take the top few with LIMIT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("LIMIT n"), " returns at most the first ", tags$code("n"),
                 " rows of the (ordered) result. Paired with ", tags$code("ORDER BY"),
                 " it expresses top-N queries."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Sort first, then keep only the first few. ", kbd("ORDER BY x DESC LIMIT 5"),
                 " is exactly “the top 5 by x.” Read it that way until you no longer ",
                 "have to translate."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("ORDER BY founded_year LIMIT 3"), " gives the three oldest labs; ",
                 kbd("ORDER BY sample_size DESC LIMIT 1"), " gives the single biggest study, ",
                 "the climate one, with 180 people. The seagull studies managed 40.")
@@ -216,14 +216,14 @@ source_order_server <- function(input, output, session) {
           conditionalPanel("output.order_step >= 4",
           step_container(4, "Skip rows with OFFSET",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("OFFSET k"), " skips the first ", tags$code("k"),
                 " rows before ", tags$code("LIMIT"), " takes over, which is the basis of ",
                 "pagination (page 2 = ", tags$code("LIMIT 10 OFFSET 10"), ")."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Jump past the first few rows, then take some. This is how you ask for ",
                 "“the runner-up,” “the second page,” or “everyone but the winner.”"),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("ORDER BY founded_year LIMIT 2 OFFSET 1"),
                 " skips the oldest lab and returns the next two: the Pediatric ",
                 "Otolaryngology Annex (1985) and the Avian Intimidation Lab (1998).")
@@ -243,18 +243,18 @@ source_order_server <- function(input, output, session) {
           conditionalPanel("output.order_step >= 5",
           step_container(5, "Where NULLs sort",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "In SQLite, ", tags$code("NULL"), " sorts as the lowest value: ",
                 "first under ", tags$code("ASC"), ", last under ", tags$code("DESC"),
                 ". A “smallest first” sort therefore surfaces the unknowns at the top. ",
                 "The placement can be stated explicitly per sort key with ",
                 tags$code("NULLS FIRST"), " or ", tags$code("NULLS LAST"), "."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Unknown values clump at one end. Sort ages ascending and the ",
                 "unknown ages come first, which is rarely what you meant by ",
                 "“youngest.” The database has to put NULL somewhere, and SQLite ",
                 "puts it first."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Six participants have a ", kbd("NULL"), " age, including all three ",
                 "seagulls. ",
                 kbd("ORDER BY age"), " lists those unknowns first; add ",
@@ -275,7 +275,8 @@ source_order_server <- function(input, output, session) {
                 "as the smallest value, while PostgreSQL and Oracle treat it as the ",
                 "largest, so the same ", kbd("ORDER BY age"), " puts the seagulls first ",
                 "here and last there. If the position of the NULLs matters, say where ",
-                "you want them.")),
+                "you want them. The district section at the bottom of this tab shows another way ",
+                "that works everywhere: sorting on whether the value is NULL.")),
             execution_order_ribbon(
               active = c("ORDER BY", "LIMIT"),
               note = "ORDER BY and LIMIT run last, once every row and column of the result exists. That is why LIMIT without ORDER BY cuts an unsorted pile, and why ORDER BY can refer to a SELECT alias when WHERE, by the standard, cannot."),

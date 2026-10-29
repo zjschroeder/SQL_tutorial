@@ -70,7 +70,9 @@ source_start_server <- function(input, output, session) {
               tags$b("Continue"), " button, and the sidebar keeps score. Every tab ",
               "ends with ten ", tags$b("Now you try"), " questions in a live editor. ",
               "Ten is roughly how many it takes before the clause stops feeling ",
-              "like a foreign phrase.")))
+              "like a foreign phrase. In the editors, ", kbd("Tab"), " indents and ",
+              kbd("Enter"), " keeps your indentation; press ", kbd("Esc"), " and then ",
+              kbd("Tab"), " to move on to the buttons.")))
       ),
 
       # ---- Anatomy ----
@@ -176,7 +178,9 @@ source_start_server <- function(input, output, session) {
       h3("The institute's database", style = "margin:18px 0 4px 0;"),
       p(style = "line-height:1.6; max-width:820px; margin-bottom:14px;",
         "Six tables, none large. This is the data every tab queries. Skim it now; ",
-        "you will be back, probably within minutes."),
+        "you will be back, probably within minutes. Or look things up from any editor: ",
+        "step 2 of the SELECT tab shows the two short queries that list the tables and a ",
+        "table's columns."),
       schema_explorer(),
 
       # ---- Relationship map ----
@@ -208,7 +212,8 @@ source_start_server <- function(input, output, session) {
         start_route("Windows",       "Per-row calculations across a group: ranks, running totals, moving averages."),
         start_route("Changing data", "INSERT, UPDATE, DELETE, and transactions, on your own disposable copy."),
         start_route("Tables",        "CREATE TABLE, types, constraints, keys, ALTER, DROP, and views."),
-        start_route("Put it together","20 mixed challenges, a free sandbox, a keyword index, and a short note on speed.")
+        start_route("Put it together","20 mixed challenges, a free sandbox, a keyword index, and a short note on speed."),
+        start_route("Glossary",      "Every term in plain words, searchable, with where it is taught and the SQL Server spelling.")
       ),
       h4("School district", style = "margin:8px 0 12px 0; color:#0B5A45;"),
       div(class = "row g-3 mb-4",

@@ -72,7 +72,7 @@ from the simulation; run it only to change the data, then run
 | Tab | Teaches |
 |------------------------------------|------------------------------------|
 | Start here | what a relational DB is; vocabulary (statement, clause, predicate; DQL/DML/DDL/TCL/DCL); the schema; written order vs execution order |
-| SELECT | projecting columns, `SELECT *`, `AS`, `DISTINCT`, computed columns |
+| SELECT | projecting columns, `SELECT *`, looking up tables and columns (`sqlite_master`, `pragma_table_info`), `AS`, `DISTINCT`, computed columns |
 | WHERE | comparisons, `AND/OR/NOT`, `BETWEEN`, `IN`, `LIKE` (`ESCAPE`, `GLOB`), **`NULL` and three-valued logic** |
 | ORDER BY | sorting, tiebreakers, `NULLS FIRST/LAST`, `LIMIT`/`OFFSET`, top-N |
 | GROUP BY | `COUNT`/`SUM`/`AVG`/`MIN`/`MAX`, `COUNT(DISTINCT)`, `GROUP_CONCAT`, `HAVING` vs `WHERE` |
@@ -84,13 +84,16 @@ from the simulation; run it only to change the data, then run
 | Changing data | `INSERT`/`UPDATE`/`DELETE`, upsert (`ON CONFLICT`), `RETURNING`, transactions (`BEGIN`/`COMMIT`/`ROLLBACK`), on a private disposable copy |
 | Tables | `CREATE TABLE`, types and affinity, constraints (`PRIMARY KEY`, `NOT NULL`, `UNIQUE`, `CHECK`, `DEFAULT`), foreign keys, `ALTER`/`DROP TABLE`, views, `CREATE TABLE AS` |
 | Put it together | 20 mixed challenges, a free sandbox, a keyword index, what other dialects add, running SQL from R, a note on indexing and speed |
+| Glossary | every term in the keyword and district topic indexes, plus core ideas: a plain definition, the tab that teaches it (a link), an example, and the SQL Server spelling; searchable and filterable by category (`R/glossary.R`) |
 
 Every tab from SELECT to Put it together also ends with an **In a school
 district** section: the tab's clause applied to the district database, a
 T-SQL (SQL Server) version where the dialects differ, often an interview
 note, and five graded district questions (five tasks on a private district
 copy for the two writing tabs). The text and quests for these live in
-`R/district_sections.R`.
+`R/district_sections.R`. Each section uses only its own tab's syntax and what
+came before it; a T-SQL note that needs later syntax says so with a
+**Preview** badge (`tsql_note(preview = ...)`).
 
 ### School district menu
 
@@ -140,6 +143,9 @@ python3 tests/scan_copy.py       # a mechanical pass over the prose
 `district.sqlite`, each `dsql_code()` block and each `dz…` editor starter
 runs there, and the `*_DTASKS` writing tasks pass on a fresh district copy and
 still pass after every district demo and task has run, in either order.
+Section 9b fails if a district section's code (demos, editors, quest answers)
+uses syntax from a later tab. Section 10 checks the glossary: every indexed
+term has an entry, every entry links to a real tab, and its runnable examples run.
 
 ## How the live editor works
 
@@ -158,6 +164,10 @@ still pass after every district demo and task has run, in either order.
   `NOT NULL`s, defaults, foreign keys, and indexes of the real thing
   (`dbWriteTable()` would drop them all). Tasks there are graded by
   inspecting the copy's state after your statement has run.
+- Tab indents (two spaces, or every selected line), Shift+Tab outdents, and
+  Enter keeps the current line's indentation. Press Esc, then Tab, to move
+  focus out of an editor. The handler is `R/editor_keys.R`, added once to the
+  page head.
 - Grading runs a reference query against the same database and compares
   result sets (order-insensitive unless the question is about ordering),
   so the answer key cannot drift from the data. Every order-sensitive

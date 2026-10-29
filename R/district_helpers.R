@@ -44,12 +44,22 @@ dsql_code <- function(code) {
 
 # The same idea written for Microsoft SQL Server (T-SQL), which is what most
 # district SIS reporting databases run. Display only: it does not run here.
-tsql_note <- function(code, ...) {
+# `preview` names syntax the note uses before its tab teaches it, e.g.
+# preview = c(CASE = "Functions"); it renders as a small "Preview" badge so
+# the learner knows the unfamiliar part is coming, not something they missed.
+tsql_note <- function(code, ..., preview = NULL) {
   div(class = "p-3 my-3",
       style = sprintf("background:%s; color:%s; border-radius:8px; border-left:5px solid %s; line-height:1.55;",
                       D_PAL$ts_bg, D_PAL$ts_fg, D_PAL$ts_acc),
       div(style = sprintf("font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:%s; margin-bottom:6px;", D_PAL$ts_fg),
           "The same thing in T-SQL (SQL Server)"),
+      if (length(preview))
+        div(class = "mb-2", style = "font-size:12.5px;",
+            span(style = sprintf("display:inline-block; background:#fff; color:%s; border:1px solid %s; border-radius:10px; padding:1px 8px; font-weight:700; font-size:11px; margin-right:6px;",
+                                 D_PAL$ts_fg, D_PAL$ts_acc), "Preview"),
+            "Uses ", tagList(lapply(seq_along(preview), function(i) tagList(
+              if (i > 1) ", ", kbd(names(preview)[i]), " (taught in ", tags$b(preview[[i]]), ")"))),
+            ". Read it for the idea; the syntax comes later."),
       div(class = "p-2 mb-2",
           style = "background:#2a1a24; color:#f3e6ee; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13px; white-space:pre-wrap; line-height:1.5; overflow-x:auto;",
           code),

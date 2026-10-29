@@ -100,19 +100,24 @@ source_where_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Filter rows with WHERE",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A ", tags$code("WHERE"), " clause supplies a predicate evaluated ",
                 "per row against the source relation; rows for which it evaluates ",
-                "to true are retained, the rest discarded before projection."),
-              plain = tagList(tags$b("In human words. "),
+                "to true are retained, the rest discarded before projection. The ",
+                "comparison operators are ", tags$code("="), ", ", tags$code("<>"),
+                " (the standard's “not equal”; ", tags$code("!="), " is a common synonym), ",
+                tags$code("<"), ", ", tags$code(">"), ", ", tags$code("<="), ", and ",
+                tags$code(">="), "."),
+              plain = tagList(
                 "Write a test each row either passes or fails. Passing rows stay. ",
                 "The usual comparisons are ", kbd("="), ", ", kbd("<>"),
                 " (not equal; ", kbd("!="), " is accepted too), ", kbd("<"), ", ",
                 kbd(">"), ", ", kbd("<="), ", ", kbd(">="),
                 ". One equals sign, not two; SQL predates that convention."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("WHERE founded_year < 2000"), " keeps the three older labs; ",
-                kbd("WHERE title = 'PI'"), " keeps the seven principal investigators. ",
+                kbd("WHERE title = 'PI'"), " keeps the seven principal investigators, and ",
+                kbd("WHERE title <> 'PI'"), " (read it as “is not”) keeps the other five. ",
                 "Text values go in ", tags$b("single quotes"), ".")
             ),
             sql_code("SELECT full_name, title\nFROM researchers\nWHERE title = 'PI';"),
@@ -143,18 +148,18 @@ source_where_server <- function(input, output, session) {
           conditionalPanel("output.where_step >= 2",
           step_container(2, "Combine conditions: AND, OR, NOT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Predicates compose with the boolean operators ", tags$code("AND"),
                 ", ", tags$code("OR"), ", ", tags$code("NOT"), ". ", tags$code("AND"),
                 " binds tighter than ", tags$code("OR"), ", so parenthesize when ",
                 "mixing them to make grouping explicit."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("AND"), " means both must hold; ", kbd("OR"), " means either will do; ",
                 kbd("NOT"), " flips a test. When you mix ", kbd("AND"), " and ",
                 kbd("OR"), " in one clause, add parentheses. SQL will happily guess ",
                 "what you meant, and it will guess the same way every time, which ",
                 "is not the same as guessing correctly."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("WHERE title = 'PI' AND start_year < 2010"),
                 " finds the senior PIs (four of them); ", kbd("WHERE title = 'PI' OR title = 'Postdoc'"),
                 " widens the net to two ranks.")
@@ -175,17 +180,17 @@ source_where_server <- function(input, output, session) {
           conditionalPanel("output.where_step >= 3",
           step_container(3, "Ranges and sets: BETWEEN and IN",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("BETWEEN a AND b"), " is shorthand for ", tags$code(">= a AND <= b"),
                 " (inclusive on both ends). ", tags$code("IN (…)"),
                 " tests membership in an explicit set, equivalent to a chain of ",
                 tags$code("OR"), " equalities."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("BETWEEN"), " is a tidy way to say “inside this range, ",
                 "endpoints included.” ", kbd("IN"), " is a tidy way to say ",
                 "“any of these values.” Neither does anything ", kbd("AND"),
                 " and ", kbd("OR"), " couldn't; they read closer to the question."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("salary BETWEEN 100000 AND 120000"), " catches the comfortably ",
                 "paid; ", kbd("lab_id IN (1, 3, 5)"),
                 " keeps studies from just those three labs.")
@@ -211,17 +216,17 @@ source_where_server <- function(input, output, session) {
           conditionalPanel("output.where_step >= 4",
           step_container(4, "Pattern matching with LIKE",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("LIKE"), " matches a string against a pattern where ",
                 tags$code("%"), " stands for any run of characters (including none) ",
                 "and ", tags$code("_"), " for exactly one. SQLite's ", tags$code("LIKE"),
                 " is case-insensitive for ASCII letters by default."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("%"), " is a wildcard for “anything here”; ", kbd("_"),
                 " is a wildcard for “one character here.” Between them you get ",
                 "“starts with,” “ends with,” and “contains,” which covers most of ",
                 "what people want before they reach for regular expressions."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("nickname LIKE 'D%'"), " finds every participant whose name ",
                 "starts with D, which at this institute means eight people, all named ",
                 "Dave. ", kbd("LIKE '%gull%'"), " finds Steven Seagull, a seagull.")
@@ -255,21 +260,21 @@ source_where_server <- function(input, output, session) {
           conditionalPanel("output.where_step >= 5",
           step_container(5, "NULL and three-valued logic",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("NULL"), " denotes the absence of a value, not zero or ",
                 "empty text. Comparisons with ", tags$code("NULL"), " yield ",
                 tags$em("unknown"), " (a third truth value), and a ", tags$code("WHERE"),
                 " keeps a row only when its predicate is ", tags$em("true"),
                 ", so unknown rows are dropped. Test for it with ",
                 tags$code("IS NULL"), " / ", tags$code("IS NOT NULL"), "."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 tags$code("NULL"), " means “we don't know.” Asking ",
                 kbd("salary = NULL"), " is asking “does an unknown equal an ",
                 "unknown?”, and the only honest answer is “unknown,” which is not ",
                 "“yes,” so the row is dropped. This is perhaps counterintuitive, ",
                 "and it is also entirely consistent. Use ", kbd("IS NULL"),
                 ", never ", kbd("= NULL"), "."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Two researchers have an undisclosed ", kbd("salary"),
                 ", and the Climate Affect Collective has a ", kbd("NULL"),
                 " building (it is between buildings). ",

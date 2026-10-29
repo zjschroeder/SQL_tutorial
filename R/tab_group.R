@@ -109,17 +109,17 @@ source_group_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Aggregate the whole table",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Aggregate functions (", tags$code("COUNT"), ", ", tags$code("SUM"),
                 ", ", tags$code("AVG"), ", ", tags$code("MIN"), ", ", tags$code("MAX"),
                 ") reduce a set of rows to a single value. With no ",
                 tags$code("GROUP BY"), " the whole table is one group, so you get ",
                 "one row back."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Ask one summary question of the entire table, how many or what's ",
                 "the average, and you get a one-row answer. That answer is still a ",
                 "table, a very short one."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("SELECT COUNT(*) FROM researchers"), " returns 12; ",
                 kbd("SELECT SUM(salary) FROM researchers"), " returns the payroll, 897000; ",
                 kbd("SELECT AVG(salary) FROM researchers"),
@@ -141,17 +141,17 @@ source_group_server <- function(input, output, session) {
           conditionalPanel("output.group_step >= 2",
           step_container(2, "One row per group with GROUP BY",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("GROUP BY"), " partitions rows into groups sharing the ",
                 "grouping key; each aggregate is then computed per group, yielding ",
                 "one output row per group. Non-aggregated columns in ",
                 tags$code("SELECT"), " must appear in ", tags$code("GROUP BY"),
                 ". Rows whose key is ", tags$code("NULL"), " are grouped together."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Sort the rows into piles by some column, then summarize each ",
                 "pile. “How many researchers ", tags$em("per title"), "?” is one ",
                 "row per title."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("SELECT title, COUNT(*) FROM researchers GROUP BY title"),
                 " returns four rows, one per job title, with its head count. Seven ",
                 "PIs and one RA. That tells you something about how the institute is run.")
@@ -173,16 +173,16 @@ source_group_server <- function(input, output, session) {
           conditionalPanel("output.group_step >= 3",
           step_container(3, "COUNT(*) vs COUNT(column)",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("COUNT(*)"), " counts rows; ", tags$code("COUNT(col)"),
                 " counts rows where ", tags$code("col"), " is non-NULL. Likewise ",
                 tags$code("AVG"), "/", tags$code("SUM"),
                 " ignore NULLs in their argument."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("COUNT(*)"), " is “how many rows.” ", kbd("COUNT(salary)"),
                 " is “how many rows have a salary on file.” NULLs are not counted, ",
                 "averaged, or summed; the aggregate behaves as if they were not there."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "12 researchers, but ", kbd("COUNT(salary)"), " is 10 because two ",
                 "salaries are NULL. ", kbd("AVG(salary)"),
                 " averages only those ten, and does not mention that it did so.")
@@ -204,19 +204,19 @@ source_group_server <- function(input, output, session) {
           conditionalPanel("output.group_step >= 4",
           step_container(4, "Filter groups with HAVING",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("WHERE"), " filters rows before grouping; ", tags$code("HAVING"),
                 " filters groups after aggregation. Conditions on an aggregate ",
                 "(", tags$code("COUNT(*) > 1"), ") must live in ", tags$code("HAVING"),
                 ", since the count does not exist until the group is formed."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("WHERE"), " decides which rows go into the piles; ", kbd("HAVING"),
                 " decides which piles survive. If the test is about a group total, ",
                 "it belongs in ", kbd("HAVING"), ". If it is about an individual row, ",
                 "it belongs in ", kbd("WHERE"), ". The distinction falls out of the ",
                 "execution order below: the count does not exist until after grouping, ",
                 "so only ", kbd("HAVING"), " can see it."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("GROUP BY title HAVING COUNT(*) > 1"),
                 " keeps only the job titles held by more than one researcher, which ",
                 "drops the institute's solitary RA.")
@@ -248,15 +248,15 @@ source_group_server <- function(input, output, session) {
           conditionalPanel("output.group_step >= 5",
           step_container(5, "Group by several columns",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Grouping by multiple columns forms one group per distinct ",
                 tags$em("combination"), " of those columns; the aggregates are ",
                 "computed within each combination."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Sort into piles by two things at once, e.g. status ", tags$em("and"),
                 " year, and summarize each pile. You get a row for every combination ",
                 "that actually occurs, and none for the ones that don't."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("GROUP BY status, year"), " gives a count for each ",
                 "status-and-year pairing present in the data. There is exactly one ",
                 "abandoned study, from 2014, so that pairing gets a row of its own.")
@@ -271,19 +271,19 @@ source_group_server <- function(input, output, session) {
           conditionalPanel("output.group_step >= 6",
           step_container(6, "SUM, COUNT(DISTINCT), GROUP_CONCAT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("SUM(x)"), " totals the non-NULL values of ", tags$code("x"),
                 ". Placing ", tags$code("DISTINCT"), " inside an aggregate, as in ",
                 tags$code("COUNT(DISTINCT x)"), ", removes duplicate values before ",
                 "aggregating. ", tags$code("GROUP_CONCAT(x, sep)"),
                 " concatenates the group's non-NULL values into one string."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("COUNT(*)"), " says how many rows are in the pile; ",
                 kbd("COUNT(DISTINCT nickname)"), " says how many ", tags$em("different"),
                 " nicknames are in it. ", kbd("GROUP_CONCAT"), " is for when you want ",
                 "to see the pile's contents and not only its size: it writes the values ",
                 "out in one cell, separated by commas."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The institute has 18 human participants sharing 11 nicknames, which is ",
                 "what eight Daves will do to a sample. The three seagulls and three ",
                 "crickets, to their credit, have three names apiece.")

@@ -117,15 +117,15 @@ source_subqueries_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Scalar subqueries",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A scalar subquery returns a single row and column, usable anywhere ",
                 "a value is expected, typically the right side of a comparison in ",
                 tags$code("WHERE"), ". It is evaluated and substituted as that value."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Put a small query in parentheses where a number would go. SQL runs ",
                 "it, gets one value, and compares against it. In practical terms, the ",
                 "threshold is now computed from the data rather than typed in."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("WHERE salary > (SELECT AVG(salary) FROM researchers)"),
                 " keeps the seven above-average earners. The threshold is computed ",
                 "from the data, so if the institute ever pays anyone more, the query ",
@@ -146,15 +146,15 @@ source_subqueries_server <- function(input, output, session) {
           conditionalPanel("output.subq_step >= 2",
           step_container(2, "Subqueries with IN",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A subquery returning a single column can feed ", tags$code("IN"),
                 ", testing membership of the outer value in that set, which amounts ",
                 "to a join-like filter without an explicit join."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Let the inner query produce a list of ids, then keep the outer rows ",
                 "whose id appears in that list. It reads almost exactly the way you ",
                 "would say it aloud."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("WHERE lab_id IN (SELECT lab_id FROM labs WHERE building = 'Wexler Hall')"),
                 " keeps the researchers whose lab sits in Wexler Hall, without your ",
                 "having to know that those labs are numbers 1 and 2.")
@@ -175,17 +175,17 @@ source_subqueries_server <- function(input, output, session) {
           conditionalPanel("output.subq_step >= 3",
           step_container(3, "EXISTS and correlated subqueries",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A correlated subquery references the outer row, so it is ",
                 "re-evaluated per outer row. ", tags$code("EXISTS (…)"),
                 " is true if that subquery yields at least one row, a pure ",
                 "existence test that ignores the selected values."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "For each outer row, ask “is there a matching row over there?” ",
                 kbd("EXISTS"), " answers yes or no and does not care what the ",
                 "matching row contains. It is the right tool for “studies that have ",
                 "any enrollment at all.”"),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("WHERE EXISTS (SELECT 1 FROM enrollments e WHERE e.study_id = s.study_id)"),
                 " keeps the nine studies with at least one enrollee. The inner ",
                 kbd("e.study_id = s.study_id"), " is the correlation: it is what ",
@@ -207,18 +207,18 @@ source_subqueries_server <- function(input, output, session) {
           conditionalPanel("output.subq_step >= 4",
           step_container(4, "The NOT IN + NULL trap",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "If a ", tags$code("NOT IN"), " subquery returns even one ",
                 tags$code("NULL"), ", the predicate becomes ", tags$em("unknown"),
                 " for every outer row, so the whole query returns nothing. ",
                 tags$code("NOT EXISTS"), " does not suffer this and is the safe ",
                 "default."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "A single NULL inside a ", kbd("NOT IN"),
                 " list poisons the whole list, and you get zero rows and no error. ",
                 "This is three-valued logic again (recall the WHERE tab). When in ",
                 "doubt, reach for ", kbd("NOT EXISTS"), "."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("participant_id"), " in enrollments is never NULL, so ",
                 kbd("NOT IN"), " is safe here. But if you ran ",
                 kbd("WHERE lab_id NOT IN (SELECT lab_id FROM researchers)"),
@@ -243,16 +243,16 @@ source_subqueries_server <- function(input, output, session) {
           conditionalPanel("output.subq_step >= 5",
           step_container(5, "Readable queries with CTEs",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A common table expression (", tags$code("WITH name AS (…)"),
                 ") names a subquery, which can then be referenced by name, often ",
                 "several times, in the main query. It improves readability and ",
                 "lets you build a query in stages."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Define a temporary, named result up front, then use that name ",
                 "below. Same power as a nested subquery, but it reads top to bottom ",
                 "instead of inside out, which is the order people read in."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("WITH lab_counts AS (...)"), " computes researchers-per-lab once, ",
                 "then the main query joins it to ", kbd("labs"), " so the output has ",
                 "names instead of ids.")
@@ -273,19 +273,19 @@ source_subqueries_server <- function(input, output, session) {
           conditionalPanel("output.subq_step >= 6",
           step_container(6, "Subqueries in FROM and in SELECT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A subquery in the ", tags$code("FROM"), " clause (a ",
                 tags$em("derived table"), ") is treated as a table for the duration of ",
                 "the query, and should be given an alias. A scalar subquery may also ",
                 "appear in the select list, where, if correlated, it is evaluated once ",
                 "per output row."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "A query's result is a table, so it can stand wherever a table can, ",
                 "including after ", kbd("FROM"), ". This is the CTE of the previous step ",
                 "without the name up front, and it is how most SQL written before CTEs ",
                 "did the job, so you will meet it constantly in other people's queries. ",
                 "Its main use is a second round of aggregation on the first round's output."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "How many researchers does a lab have, on average? ",
                 kbd("AVG(COUNT(*))"), " is an error (“misuse of aggregate”), since an ",
                 "aggregate cannot contain another. Count per lab in an inner query, then ",
@@ -320,18 +320,18 @@ source_subqueries_server <- function(input, output, session) {
           conditionalPanel("output.subq_step >= 7",
           step_container(7, "Recursive CTEs",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A recursive CTE (", tags$code("WITH RECURSIVE"), ") has two parts joined ",
                 "by ", tags$code("UNION ALL"), ": an anchor query that supplies the ",
                 "starting rows, and a recursive query that refers to the CTE's own name ",
                 "and is re-run on the rows most recently produced until it produces no more."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "A loop, in a language that has none. Start with one row; keep deriving ",
                 "the next row from the last; stop when the ", kbd("WHERE"),
                 " says so. Its two everyday uses are generating a series (every year, ",
                 "every date, the numbers 1 to n) and walking a hierarchy (a manager's ",
                 "reports, and their reports, and so on down)."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "How many studies did the institute run in each year from 2014 to 2023? ",
                 kbd("GROUP BY year"), " on ", kbd("studies"), " cannot report a year with ",
                 "no studies, there being no row to count. Generate the ten years, ",

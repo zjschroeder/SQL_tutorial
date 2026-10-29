@@ -125,17 +125,17 @@ source_windows_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "A window that doesn't collapse rows",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Appending ", tags$code("OVER (…)"), " to an aggregate turns it into ",
                 "a window function: it is computed over a set of rows (the window) ",
                 "but produces a value for ", tags$em("every"),
                 " row rather than one per group. ", tags$code("OVER ()"),
                 " with an empty window spans the whole result."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Same aggregate, but instead of shrinking the table it adds a column. ",
                 kbd("AVG(salary) OVER ()"), " stamps the overall average onto every ",
                 "row so each person can be compared to it without a second query."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("SELECT full_name, salary, AVG(salary) OVER () AS overall_avg"),
                 " shows each of the twelve researchers beside the institute-wide ",
                 "average, which is a slightly awkward thing to see next to Wesley ",
@@ -157,16 +157,16 @@ source_windows_server <- function(input, output, session) {
           conditionalPanel("output.win_step >= 2",
           step_container(2, "Per-group windows: PARTITION BY",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("PARTITION BY"), " divides rows into partitions; the window ",
                 "function restarts for each, so the value reflects that row's ",
                 "partition only. It is the windowed analog of ", tags$code("GROUP BY"), "."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Compute the average (or rank, or total) ", tags$em("within each group"),
                 ", but still keep every row. “Each researcher's salary next to ",
                 tags$em("their own lab's"), " average.” It is GROUP BY's grouping, ",
                 "without the collapse."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("AVG(salary) OVER (PARTITION BY lab_id)"),
                 " gives every researcher their own lab's average salary. Dr. Roams, ",
                 "having no lab, is a partition of one, and her lab average is her salary.")
@@ -181,18 +181,18 @@ source_windows_server <- function(input, output, session) {
           conditionalPanel("output.win_step >= 3",
           step_container(3, "Ranking: ROW_NUMBER, RANK, DENSE_RANK",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Ranking functions need an ", tags$code("ORDER BY"),
                 " inside ", tags$code("OVER"), ". ", tags$code("ROW_NUMBER"),
                 " is a strict 1..n; ", tags$code("RANK"),
                 " gives ties the same rank and then skips; ", tags$code("DENSE_RANK"),
                 " gives ties the same rank without skipping."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("ROW_NUMBER"), " is a numbered list, ties broken arbitrarily. ",
                 kbd("RANK"), " is competition ranking: two firsts, then a third. ",
                 kbd("DENSE_RANK"), " is two firsts, then a second. Three functions ",
                 "for one idea because people disagree about what happens after a tie."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("RANK() OVER (ORDER BY salary DESC)"),
                 " ranks researchers by pay; add ", kbd("PARTITION BY lab_id"),
                 " to rank within each lab. There are no salary ties at the institute, ",
@@ -215,18 +215,18 @@ source_windows_server <- function(input, output, session) {
           conditionalPanel("output.win_step >= 4",
           step_container(4, "Order-aware windows: running totals",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "With an ", tags$code("ORDER BY"), " inside ", tags$code("OVER"),
                 ", an aggregate accumulates over the rows up to and including the ",
                 "current one (the default frame, which step 6 states precisely), ",
                 "producing running totals."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Order the window, and ", kbd("SUM"),
                 " becomes a running total: the sum so far, row by row. Same function, ",
                 "different frame. In practical terms, adding ORDER BY inside OVER ",
                 "changes the question from “what is the total?” to “what was the ",
                 "total as of this row?”"),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Each enrollment has repeated trials, up to five. ",
                 kbd("SUM(value) OVER (PARTITION BY enrollment_id ORDER BY trial)"),
                 " gives the cumulative value across trials within each enrollment, ",
@@ -242,17 +242,17 @@ source_windows_server <- function(input, output, session) {
           conditionalPanel("output.win_step >= 5",
           step_container(5, "Looking at neighbors: LAG and LEAD",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("LAG(col)"), " and ", tags$code("LEAD(col)"),
                 " return the value of ", tags$code("col"),
                 " from the previous / next row within the ordered window, or ",
                 tags$code("NULL"), " at the boundary. They are the standard tool ",
                 "for row-to-row differences."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Peek at the row before (", kbd("LAG"), ") or after (", kbd("LEAD"),
                 "). Subtract, and you have the change from one trial to the next, ",
                 "which is otherwise surprisingly annoying to compute in SQL."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("value - LAG(value) OVER (PARTITION BY enrollment_id ORDER BY trial)"),
                 " is the trial-to-trial change. The first trial has no predecessor, ",
                 "so its delta is NULL, which is the correct answer to “how much did ",
@@ -275,7 +275,7 @@ source_windows_server <- function(input, output, session) {
           conditionalPanel("output.win_step >= 6",
           step_container(6, "Frames: ROWS BETWEEN",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Within a partition, the ", tags$em("frame"), " is the subset of rows an ",
                 "aggregate window function is computed over for the current row. It is ",
                 "specified as ", tags$code("ROWS BETWEEN <start> AND <end>"),
@@ -285,13 +285,13 @@ source_windows_server <- function(input, output, session) {
                 ". When ", tags$code("ORDER BY"), " is present and no frame is given, the ",
                 "default is ", tags$code("RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"),
                 ", which extends to every row tied with the current one."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "The partition says which rows are in the same group as this one. The ",
                 "frame says which of those rows to use right now: all of them so far (a ",
                 "running total), the last three (a moving average), or this one and its ",
                 "two neighbors. Step 4's running total was a frame all along; you were ",
                 "using the default without being told."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Enrollment 2's five trials read 7.95, 5.49, 5.79, 7.27, 7.46. A frame of ",
                 kbd("2 PRECEDING AND CURRENT ROW"), " averages each trial with the two ",
                 "before it: 6.41 at trial 3, 6.18 at trial 4. Trials 1 and 2 have fewer ",
@@ -326,7 +326,7 @@ source_windows_server <- function(input, output, session) {
           conditionalPanel("output.win_step >= 7",
           step_container(7, "Filtering on a window; NTILE, FIRST_VALUE",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Window functions are evaluated after ", tags$code("WHERE"), ", ",
                 tags$code("GROUP BY"), ", and ", tags$code("HAVING"),
                 ", so their results cannot be referenced in those clauses. To filter on ",
@@ -335,14 +335,14 @@ source_windows_server <- function(input, output, session) {
                 ", which assigns rows to ", tags$code("n"), " buckets of near-equal size, and ",
                 tags$code("FIRST_VALUE(x)"), ", which returns ", tags$code("x"),
                 " from the first row of the frame."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "“The best-paid person in each lab” is a ranking followed by a filter, ",
                 "and the filter cannot go in the same query as the ranking, because ",
                 kbd("WHERE"), " has finished before any rank exists. So: rank in a CTE, ",
                 "then select from the CTE where the rank is 1. This two-step shape, ",
                 "top-N per group, is probably the most common reason anyone writes a ",
                 "window function."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Seven rows, one per lab and one for the lab-less Dr. Roams, who tops a ",
                 "field of one. ", kbd("NTILE(4)"), " splits the ten disclosed salaries ",
                 "into quartiles of 3, 3, 2, and 2, and puts both grad students, to ",

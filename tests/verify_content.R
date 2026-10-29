@@ -407,6 +407,89 @@ for (tab in names(DISTRICT_TOPIC_INDEX)) {
 }
 ok(n_t, " district topics found in their tabs")
 
+# ---- 9b. district sections use only what their tab has taught ----------------
+# The section that closes each core tab may use that tab's syntax and anything
+# taught before it, never a later tab's. Checked on the SQL a learner reads,
+# runs, or must write (demo code, editors, quest references and solutions).
+# T-SQL notes are exempt: they flag later syntax with tsql_note(preview = ...).
+section("9b. district sections stay within their tab")
+TAB_ORDER <- c("SELECT", "WHERE", "ORDER BY", "GROUP BY", "Functions", "JOINs", "UNION",
+               "Subqueries", "Windows", "Changing data", "Tables")
+TAUGHT_IN <- list(
+  "WHERE"         = c("\\bWHERE\\b", "<>", "!=", "\\bBETWEEN\\b", "\\bLIKE\\b", "\\bGLOB\\b",
+                      "\\bIS\\s+(NOT\\s+)?NULL\\b", "\\bIN\\s*\\("),
+  "ORDER BY"      = c("\\bORDER\\s+BY\\b", "\\bLIMIT\\b", "\\bOFFSET\\b"),
+  "GROUP BY"      = c("\\b(COUNT|SUM|AVG|MIN|MAX|TOTAL|GROUP_CONCAT)\\s*\\(", "\\bGROUP\\s+BY\\b", "\\bHAVING\\b"),
+  "Functions"     = c("\\|\\|", "\\bCASE\\b", "\\b(SUBSTR|UPPER|LOWER|LENGTH|TRIM|REPLACE|INSTR|ROUND|ABS|CAST|COALESCE|IFNULL|NULLIF|IIF|DATE|DATETIME|STRFTIME|JULIANDAY)\\s*\\("),
+  "JOINs"         = c("\\bJOIN\\b"),
+  "UNION"         = c("\\bUNION\\b", "\\bINTERSECT\\b", "\\bEXCEPT\\b"),
+  "Subqueries"    = c("^\\s*WITH\\b", "\\bEXISTS\\b", "\\(\\s*SELECT\\b"),
+  "Windows"       = c("\\bOVER\\s*[(a-z_]"),
+  "Changing data" = c("\\bINSERT\\b", "\\bUPDATE\\b", "\\bDELETE\\b", "\\bBEGIN\\b", "\\bCOMMIT\\b", "\\bROLLBACK\\b"),
+  "Tables"        = c("\\bCREATE\\b", "\\bALTER\\b", "\\bDROP\\b")
+)
+DSEC_TAB <- c(dsec_select = "SELECT", dsec_where = "WHERE", dsec_order = "ORDER BY",
+              dsec_group = "GROUP BY", dsec_functions = "Functions", dsec_joins = "JOINs",
+              dsec_union = "UNION", dsec_subqueries = "Subqueries", dsec_windows = "Windows",
+              dsec_changing = "Changing data", dsec_tables = "Tables")
+DQUEST_TAB <- c(SELECT_DQUEST = "SELECT", WHERE_DQUEST = "WHERE", ORDER_DQUEST = "ORDER BY",
+                GROUP_DQUEST = "GROUP BY", FUNC_DQUEST = "Functions", JOINS_DQUEST = "JOINs",
+                UNION_DQUEST = "UNION", SUBQ_DQUEST = "Subqueries", WIN_DQUEST = "Windows",
+                CHANGING_DTASKS = "Changing data", TABLES_DTASKS = "Tables")
+too_early <- function(sql, tab) {
+  sql <- gsub("--[^\n]*", "", sql)
+  sql <- gsub("'[^']*'", "''", sql)          # string literals are data, not syntax
+  later <- TAB_ORDER[seq_along(TAB_ORDER) > match(tab, TAB_ORDER)]
+  hits <- character()
+  for (t in intersect(later, names(TAUGHT_IN))) for (rx in TAUGHT_IN[[t]])
+    if (grepl(rx, sql, ignore.case = TRUE, perl = TRUE)) {
+      m <- regmatches(sql, regexpr(rx, sql, ignore.case = TRUE, perl = TRUE))
+      hits <- c(hits, sprintf("%s (taught in %s)", trimws(m), t))
+    }
+  unique(hits)
+}
+n_fr <- 0
+for (fn in names(DSEC_TAB)) for (blk in DSEC[[fn]]) {
+  if (blk$db != "district") next
+  n_fr <- n_fr + 1
+  h <- too_early(blk$sql, DSEC_TAB[[fn]])
+  if (length(h)) fail(fn, " shows ", substr(gsub("\\s+", " ", blk$sql), 1, 60), " ... using ", paste(h, collapse = "; "))
+}
+for (nm in names(DQUEST_TAB)) {
+  qs <- get(nm)
+  for (i in seq_along(qs)) for (fld in intersect(c("ref", "solution"), names(qs[[i]]))) {
+    n_fr <- n_fr + 1
+    h <- too_early(qs[[i]][[fld]], DQUEST_TAB[[nm]])
+    if (length(h)) fail(nm, "[[", i, "]]$", fld, " uses ", paste(h, collapse = "; "))
+  }
+}
+ok(n_fr, " district code blocks use only their tab's syntax and earlier")
+
+# ---- 10. glossary ----------------------------------------------------------------
+section("10. glossary")
+gl_names <- tolower(unlist(lapply(GLOSSARY, function(e) c(e$term, e$also))))
+dup <- unique(gl_names[duplicated(gl_names)])
+if (length(dup)) fail("glossary has duplicate terms: ", paste(dup, collapse = ", "))
+idx_terms <- unique(c(unlist(KEYWORD_INDEX), unlist(DISTRICT_TOPIC_INDEX)))
+missing <- idx_terms[!tolower(idx_terms) %in% gl_names]
+if (length(missing)) fail("indexed terms with no glossary entry: ", paste(missing, collapse = ", "))
+nav_all <- gsub("nav_panel\\(title = \"|\"", "", unlist(regmatches(app_src, gregexpr("nav_panel\\(title = \"[^\"]+\"", app_src))))
+for (e in GLOSSARY) {
+  if (!e$tab %in% nav_all) fail("glossary '", e$term, "' points to tab '", e$tab, "', which is not in the nav")
+  if (!e$cat %in% GLOSSARY_CATS) fail("glossary '", e$term, "' has unknown category '", e$cat, "'")
+  for (f in c("term", "cat", "tab", "def")) if (!is.character(e[[f]]) || !nzchar(e[[f]])) fail("glossary '", e$term, "' is missing ", f)
+}
+# Examples that are complete SQLite statements over the tutorial's tables must run.
+n_gx <- 0
+for (e in GLOSSARY) if (!is.null(e$ex) && grepl(";\\s*$", e$ex) &&
+                        !grepl("^(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|PRAGMA|EXEC|DECLARE|con <-)", e$ex) &&
+                        !grepl("\\b(TOP|INFORMATION_SCHEMA|sp_help)\\b", e$ex)) {
+  n_gx <- n_gx + 1
+  r1 <- run_query(ro, e$ex); r2 <- run_query(dro, e$ex)
+  if (!isTRUE(r1$ok) && !isTRUE(r2$ok)) fail("glossary example for '", e$term, "' does not run: ", e$ex, " -> ", r2$error)
+}
+ok(length(GLOSSARY), " glossary entries; all ", length(idx_terms), " indexed terms covered; ", n_gx, " runnable examples run")
+
 dbDisconnect(dro)
 dbDisconnect(ro)
 cat("\n", if (length(fails)) sprintf("%d FAILURE(S)\n", length(fails)) else "ALL CHECKS PASSED\n", sep = "")

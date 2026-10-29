@@ -107,7 +107,7 @@ CAPSTONE_QUEST <- list(
 KEYWORD_INDEX <- list(
   "Start here"    = c("statement", "clause", "keyword", "identifier", "literal", "expression",
                       "predicate", "schema", "Primary key", "Foreign key", "DQL", "DML", "DDL", "TCL", "DCL"),
-  "SELECT"        = c("SELECT", "FROM", "*", "AS", "DISTINCT"),
+  "SELECT"        = c("SELECT", "FROM", "*", "AS", "DISTINCT", "sqlite_master", "pragma_table_info"),
   "WHERE"         = c("WHERE", "=", "<>", "!=", "AND", "OR", "NOT", "BETWEEN", "IN", "LIKE",
                       "ESCAPE", "GLOB", "IS NULL", "IS NOT NULL"),
   "ORDER BY"      = c("ORDER BY", "ASC", "DESC", "NULLS FIRST", "NULLS LAST", "LIMIT", "OFFSET"),
@@ -219,7 +219,10 @@ source_capstone_server <- function(input, output, session) {
         p(style = "line-height:1.6; max-width:820px;",
           "Every keyword and function this tutorial teaches, by the tab that teaches ",
           "it. If a term is listed here, that tab has a step or a collapsible on it; if ",
-          "you are looking for one that is not, the section after this one may say why."),
+          "you are looking for one that is not, the section after this one may say why. ",
+          "For what each term means, see the ",
+          tags$a(href = "#", onclick = "Shiny.setInputValue('start_goto', 'Glossary', {priority:'event'}); return false;",
+                 tags$b("Glossary")), " tab."),
         term_table(head = c("Tab", "Teaches"),
           rows = lapply(names(KEYWORD_INDEX), function(tab)
             c(tab, paste(KEYWORD_INDEX[[tab]], collapse = "  \u00b7  ")))),

@@ -120,7 +120,7 @@ source_functions_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Text: ||, UPPER, LENGTH, SUBSTR",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Scalar functions take one row's values and return one value. For text, ",
                 "the operator ", tags$code("||"), " concatenates; ", tags$code("UPPER"),
                 " and ", tags$code("LOWER"), " change case; ", tags$code("LENGTH"),
@@ -128,12 +128,12 @@ source_functions_server <- function(input, output, session) {
                 " extracts a substring, counting from 1; ", tags$code("TRIM"),
                 " removes surrounding spaces; ", tags$code("REPLACE(x, from, to)"),
                 " substitutes."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "A function goes wherever a column name could go, and it is applied to ",
                 "every row separately. ", kbd("||"), " glues pieces of text end to end, ",
                 "and the pieces can be columns, quoted text, or both. Positions in a ",
                 "string start at 1, which will feel like home."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("full_name || ' (' || title || ')'"), " turns two columns into ",
                 "“Wesley Tern (Grad Student).” ", kbd("LENGTH(nickname)"),
                 " is 4 for each of the Daves and 17 for Lord Stridulation, a cricket.")
@@ -162,7 +162,7 @@ source_functions_server <- function(input, output, session) {
           conditionalPanel("output.func_step >= 2",
           step_container(2, "Numbers: ROUND, division, CAST",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "The arithmetic operators are ", tags$code("+"), ", ", tags$code("-"), ", ",
                 tags$code("*"), ", ", tags$code("/"), ", and ", tags$code("%"),
                 " (remainder). Division of one integer by another yields an integer, ",
@@ -170,13 +170,13 @@ source_functions_server <- function(input, output, session) {
                 tags$code("d"), " decimal places and ", tags$code("ABS(x)"),
                 " gives the absolute value. ", tags$code("CAST(x AS type)"),
                 " converts a value to another type."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("5 / 2"), " is ", kbd("2"), ". Both numbers are whole, so SQL gives a ",
                 "whole answer and discards the rest without comment. Make either side a ",
                 "decimal, ", kbd("5 / 2.0"), ", and you get ", kbd("2.5"),
                 ". This is the single most common way to get a wrong number out of a ",
                 "correct-looking query."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The seagull study enrolled 40. ", kbd("sample_size / 12"),
                 " says that is 3 dozen; ", kbd("sample_size / 12.0"),
                 " says 3.33. The mean sample size across the ten studies is 52.9, and ",
@@ -206,19 +206,19 @@ source_functions_server <- function(input, output, session) {
           conditionalPanel("output.func_step >= 3",
           step_container(3, "If-then logic with CASE",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A ", tags$code("CASE"), " expression evaluates its ", tags$code("WHEN"),
                 " conditions in order and returns the ", tags$code("THEN"),
                 " value of the first that is true, or the ", tags$code("ELSE"),
                 " value if none is. With no ", tags$code("ELSE"), ", it returns ",
                 tags$code("NULL"), ". It is an expression: it yields a value, and may ",
                 "appear wherever a value can."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "SQL's if / else-if / else. The conditions are tried from the top, the ",
                 "first one that holds wins, and the rest are never looked at, so order ",
                 "them from most specific to least. Finish with ", kbd("END"),
                 " and, nearly always, an ", kbd("AS"), " to name the result."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Banding the ten studies at 30 and 60 participants gives two small, six ",
                 "medium, and two large. The cricket telepathy study (n = 8) is small. ",
                 "The climate study (n = 180) is large, and is also the only study at the ",
@@ -252,19 +252,19 @@ source_functions_server <- function(input, output, session) {
           conditionalPanel("output.func_step >= 4",
           step_container(4, "Standing in for NULL: COALESCE",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("COALESCE(a, b, …)"), " returns its first non-NULL argument, or ",
                 tags$code("NULL"), " if all are NULL. ", tags$code("IFNULL(a, b)"),
                 " is SQLite's two-argument form of the same function. ",
                 tags$code("NULLIF(a, b)"), " is the reverse operation: it returns ",
                 tags$code("NULL"), " when ", tags$code("a = b"), " and ", tags$code("a"),
                 " otherwise."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("COALESCE(building, 'between buildings')"), " reads as “the building, ",
                 "or failing that, this.” It is how you keep a NULL from wiping out a ",
                 "calculation or leaving a hole in a report. ", kbd("NULLIF"),
                 " goes the other way and turns a placeholder value back into an honest NULL."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The Climate Affect Collective has no building. ",
                 kbd("lab_name || ' in ' || building"), " therefore comes back NULL for that ",
                 "lab, whole sentence and all, because anything glued to NULL is NULL. Wrap ",
@@ -294,20 +294,20 @@ source_functions_server <- function(input, output, session) {
           conditionalPanel("output.func_step >= 5",
           step_container(5, "Counting with conditions",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "Placing a ", tags$code("CASE"), " expression inside an aggregate restricts ",
                 "what that aggregate counts or sums, independently of the other ",
                 "aggregates in the same query (conditional aggregation). The standard ",
                 tags$code("FILTER (WHERE …)"), " clause, written after an aggregate, ",
                 "expresses the same restriction directly."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 kbd("WHERE"), " filters the whole query, so it can give you the completed ",
                 "studies or the ongoing ones, not both counts side by side. ",
                 kbd("SUM(CASE WHEN … THEN 1 ELSE 0 END)"), " gives each column its own ",
                 "private filter: score a row 1 if it qualifies and 0 if not, then add up ",
                 "the scores. It is how one query returns several differently-filtered ",
                 "totals, and how rows get pivoted into columns."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "One row, three counts: six studies completed, three ongoing, one ",
                 "abandoned. With ", kbd("GROUP BY status"), " you would get the same ",
                 "numbers as three rows; this form puts them in three columns, which is ",
@@ -337,7 +337,7 @@ source_functions_server <- function(input, output, session) {
           conditionalPanel("output.func_step >= 6",
           step_container(6, "Dates and times",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "SQLite has no date type. Dates are stored as ISO-8601 text (",
                 tags$code("'2024-03-15'"), "), which sorts and compares correctly as ",
                 "text, and are manipulated with ", tags$code("date()"), ", ",
@@ -345,14 +345,14 @@ source_functions_server <- function(input, output, session) {
                 ". Each takes a time value followed by optional modifiers such as ",
                 tags$code("'+1 month'"), " or ", tags$code("'start of year'"),
                 "; the special value ", tags$code("'now'"), " is the current time in UTC."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Write dates year-first, ", kbd("'2024-03-15'"), ", and the ordinary ",
                 "comparisons work on them: ", kbd("<"), ", ", kbd("BETWEEN"), ", ",
                 kbd("ORDER BY"), ". Date arithmetic goes through ", kbd("date()"),
                 " with a modifier. Pulling out a part (the year, the month) goes through ",
                 kbd("strftime()"), ", whose format codes (", kbd("%Y"), ", ", kbd("%m"),
                 ", ", kbd("%d"), ") will look familiar from R's ", kbd("format()"), "."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The institute, characteristically, recorded the year of everything and ",
                 "the date of nothing, so the example computes from ", kbd("'now'"),
                 ": each researcher's years of service, from ", kbd("start_year"),

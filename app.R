@@ -205,9 +205,11 @@ ui <- page_navbar(
       .toc-item.locked .toc-num { background:#f5f7f8; color:#c5cfd3; }
       .toc-check { margin-left:auto; color:#78c2ad; font-weight:700; font-size:13px; }
       .sql-textarea:focus { outline:2px solid #56B4E9; outline-offset:1px; }
+      .sql-textarea { tab-size:2; }
       .tab-grid-card { display:block; background:#fff; border:1px solid #e0e6ea; border-radius:10px; padding:16px; text-decoration:none; color:#1a3a4a; transition:transform 0.15s ease, box-shadow 0.15s ease; height:100%; }
       .tab-grid-card:hover { transform:translateY(-2px); box-shadow:0 4px 14px rgba(0,0,0,0.08); text-decoration:none; color:#1a3a4a; }
-    "))
+    ")),
+    tags$script(HTML(EDITOR_KEYS_JS))
   ),
 
   nav_panel(title = "Start here",      uiOutput("start_tab_ui")),
@@ -231,7 +233,8 @@ ui <- page_navbar(
     nav_panel(title = "Cohorts and outcomes",  uiOutput("dcoh_tab_ui")),
     nav_panel(title = "Data quality",          uiOutput("dqa_tab_ui")),
     nav_panel(title = "District challenges",   uiOutput("dch_tab_ui"))
-  )
+  ),
+  nav_panel(title = "Glossary",        uiOutput("glossary_tab_ui"))
 )
 
 # ============================================================================
@@ -259,6 +262,7 @@ server <- function(input, output, session) {
   if (exists("source_district_cohorts_server"))    source_district_cohorts_server(input, output, session)
   if (exists("source_district_quality_server"))    source_district_quality_server(input, output, session)
   if (exists("source_district_challenges_server")) source_district_challenges_server(input, output, session)
+  if (exists("source_glossary_server"))   source_glossary_server(input, output, session)
 }
 
 shinyApp(ui, server)

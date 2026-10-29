@@ -118,18 +118,18 @@ source_union_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Stack two results: UNION ALL",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("A UNION ALL B"), " returns every row of ", tags$code("A"),
                 " followed by every row of ", tags$code("B"), ", duplicates retained. ",
                 "Both queries must return the same number of columns; columns are ",
                 "matched by position, and the result takes its column names from the ",
                 "first query."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Write one query, write ", kbd("UNION ALL"), ", write another. The second ",
                 "result is appended under the first. The two queries can read entirely ",
                 "different tables, so long as the columns line up: first with first, ",
                 "second with second."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Everyone the institute has on file: 12 researchers' names stacked on 24 ",
                 "participants' nicknames makes 36 rows. A literal such as ",
                 kbd("'researcher'"), " in each half records which table a row came ",
@@ -151,18 +151,18 @@ source_union_server <- function(input, output, session) {
           conditionalPanel("output.union_step >= 2",
           step_container(2, "Stack and de-duplicate: UNION",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("A UNION B"), " returns the distinct rows appearing in ",
                 tags$code("A"), ", in ", tags$code("B"), ", or in both. It is ",
                 tags$code("UNION ALL"), " followed by duplicate elimination over the ",
                 "whole row, including duplicates that were already present within ",
                 tags$code("A"), " alone."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Same stacking, then every repeated row is collapsed to one, the way ",
                 kbd("DISTINCT"), " would. Note which word is the short one: plain ",
                 kbd("UNION"), " does the extra work, and you have to ask for ",
                 kbd("ALL"), " to be spared it."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Study 1 stared at seagulls; study 7 is its replication. Study 1 enrolled ",
                 "10 participants and study 7 enrolled 8, so ", kbd("UNION ALL"),
                 " of their ids has 18 rows. ", kbd("UNION"), " has 15, because three ",
@@ -186,15 +186,15 @@ source_union_server <- function(input, output, session) {
           conditionalPanel("output.union_step >= 3",
           step_container(3, "Rows in both: INTERSECT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("A INTERSECT B"), " returns the distinct rows that appear in ",
                 "both ", tags$code("A"), " and ", tags$code("B"),
                 ". Rows are compared in their entirety: two rows match only if every ",
                 "column matches."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "The overlap of two results. It answers “who is on both lists?” without a ",
                 "join, provided both queries produce the same columns to compare."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Three participants are in both the seagull study and its replication: ",
                 "Steven Seagull, The Admiral, and one Dave (participant 4), who, the ",
                 "enrollments table records, dropped out of the original and came back ",
@@ -217,17 +217,17 @@ source_union_server <- function(input, output, session) {
           conditionalPanel("output.union_step >= 4",
           step_container(4, "Rows in one but not the other: EXCEPT",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("A EXCEPT B"), " returns the distinct rows of ", tags$code("A"),
                 " that do not appear in ", tags$code("B"), ". Unlike ",
                 tags$code("UNION"), " and ", tags$code("INTERSECT"),
                 ", it is not symmetric: ", tags$code("B EXCEPT A"),
                 " is a different result."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Subtraction. Start with the first result and strike out anything that ",
                 "also appears in the second. Which query goes on top therefore matters, ",
                 "in the way that 10 − 3 and 3 − 10 are different sums."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Seven participants were in the original seagull study and skipped the ",
                 "replication; five joined the replication fresh. Seven, five, and the ",
                 "three who did both add up to the fifteen from step 2, which is the kind ",
@@ -257,19 +257,19 @@ source_union_server <- function(input, output, session) {
           conditionalPanel("output.union_step >= 5",
           step_container(5, "The rules, and where sets run",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "In a compound query, each operand is a complete ", tags$code("SELECT"),
                 " with its own ", tags$code("WHERE"), ", ", tags$code("GROUP BY"),
                 ", and ", tags$code("HAVING"), ". A single ", tags$code("ORDER BY"),
                 " and ", tags$code("LIMIT"), " may follow the last operand, and they ",
                 "apply to the combined result. For the purpose of detecting duplicates, ",
                 "NULLs are considered equal to one another."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Each half is finished before the two are combined, and the sorting ",
                 "happens once, at the very end, on the combined rows. ", kbd("ORDER BY"),
                 " therefore goes after the last query only, and it uses the first ",
                 "query's column names, those being the only names the result has."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Every year in which anything began at the institute: lab foundings, ",
                 "researcher start dates, and studies, three tables unioned into one ",
                 "column of 21 distinct years, from 1979 (Bioacoustics & Thermometry) to ",

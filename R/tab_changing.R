@@ -146,17 +146,17 @@ source_changing_server <- function(input, output, session) {
           # ===== STEP 1 =====
           step_container(1, "Your own private copy",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "The query tabs connect read-only, so no statement can alter the ",
                 "shipped data. This tab instead seeds a fresh in-memory database ",
                 "from the same schema (keys, constraints, and indexes included) and ",
                 "the same rows, scoped to your session: a disposable sandbox with ",
                 "full write access."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "You are editing a throwaway clone, not the master. If you mangle it, ",
                 "press ", tags$b("Reset"), " and it is pristine again. No one else ",
                 "sees your changes, and no one else's changes reach you."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Same six tables, same rows you have been querying, now editable. ",
                 "Run a harmless ", kbd("SELECT"), " to confirm the data is all here, ",
                 "then start changing it.")
@@ -176,16 +176,16 @@ source_changing_server <- function(input, output, session) {
           conditionalPanel("output.crud_step >= 2",
           step_container(2, "INSERT: add rows",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("INSERT INTO table (columns…) VALUES (values…)"),
                 " appends a row. Naming the columns explicitly means the statement ",
                 "still works if someone later adds a column, and lets you omit columns ",
                 "that have defaults or accept ", tags$code("NULL"), "."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "List the columns, then the matching values in the same order. Use ",
                 kbd("NULL"), " for an unknown, quotes for text, bare numbers for ",
                 "numbers. Count the commas; the two lists must line up."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("INSERT INTO labs (lab_id, lab_name, building, founded_year) VALUES (8, 'Test Lab', 'Wexler Hall', 2025)"),
                 " adds a lab. Then ", kbd("SELECT * FROM labs"), " to see it, ",
                 "sitting there at the bottom, looking new.")
@@ -222,18 +222,18 @@ source_changing_server <- function(input, output, session) {
           conditionalPanel("output.crud_step >= 3",
           step_container(3, "UPDATE: change rows",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("UPDATE table SET col = expr WHERE …"),
                 " modifies the rows matching the predicate. The ", tags$code("WHERE"),
                 " is what scopes it; its expression may reference the column's ",
                 "current value."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Say what to change and, above all, ", tags$b("which rows"),
                 ". You can compute from the old value, e.g. ",
                 kbd("SET sample_size = sample_size + 10"), ", which is safer than ",
                 "typing the new number, since it is right even if the old number ",
                 "wasn't what you remembered."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("UPDATE researchers SET salary = 36000 WHERE researcher_id = 2"),
                 " gives one grad student a raise; without the ", kbd("WHERE"),
                 " it would set ", tags$em("everyone's"), " salary to 36000, ",
@@ -261,17 +261,17 @@ source_changing_server <- function(input, output, session) {
           conditionalPanel("output.crud_step >= 4",
           step_container(4, "DELETE: remove rows",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 tags$code("DELETE FROM table WHERE …"),
                 " removes the matching rows. As with ", tags$code("UPDATE"),
                 ", the ", tags$code("WHERE"), " defines the scope; omitting it ",
                 "empties the table."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "Pick the rows to drop with ", kbd("WHERE"),
                 ", and they are gone. Without a ", kbd("WHERE"), ", every row is gone. ",
                 "There is no confirmation dialog; SQL was designed by people who ",
                 "assumed you meant it."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 kbd("DELETE FROM enrollments WHERE dropped_out = 1"),
                 " purges the dropouts; ", kbd("DELETE FROM participants WHERE participant_id = 24"),
                 " removes just Pip, who was enrolled in nothing anyway.")
@@ -300,20 +300,20 @@ source_changing_server <- function(input, output, session) {
           conditionalPanel("output.crud_step >= 5",
           step_container(5, "Insert-or-update, and RETURNING",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "An ", tags$code("ON CONFLICT"), " clause on an ", tags$code("INSERT"),
                 " specifies what to do when the new row would violate a uniqueness ",
                 "constraint: ", tags$code("DO NOTHING"), ", or ", tags$code("DO UPDATE SET …"),
                 ", within which ", tags$code("excluded"), " refers to the row that failed ",
                 "to insert (an “upsert”). A ", tags$code("RETURNING"),
                 " clause makes a data-changing statement return the rows it affected."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "“Add this row; if it is already there, update it.” Without an upsert ",
                 "that is a ", kbd("SELECT"), " to look, then an ", kbd("INSERT"), " or an ",
                 kbd("UPDATE"), " depending on what you found, and a chance for something ",
                 "to change in between. ", kbd("RETURNING *"), " shows you the row as it ",
                 "ended up, which saves running a ", kbd("SELECT"), " afterwards to check."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "The statement below files a Test Lab under ", kbd("lab_id"),
                 " 8. If step 2 already created lab 8, the insert conflicts, and the ",
                 kbd("DO UPDATE"), " moves the existing lab to the Greenhouse Annex. Either ",
@@ -344,14 +344,14 @@ source_changing_server <- function(input, output, session) {
           conditionalPanel("output.crud_step >= 6",
           step_container(6, "Transactions: BEGIN, COMMIT, ROLLBACK",
             explanation_triad(
-              formal = tagList(tags$b("Academic. "),
+              formal = tagList(
                 "A transaction groups statements into a unit that takes effect entirely ",
                 "or not at all. ", tags$code("BEGIN"), " opens one; ", tags$code("COMMIT"),
                 " makes its changes permanent; ", tags$code("ROLLBACK"),
                 " discards them. Outside an explicit transaction each statement is its ",
                 "own transaction and commits immediately (autocommit). The guarantees ",
                 "are summarized as ACID: atomicity, consistency, isolation, durability."),
-              plain = tagList(tags$b("In human words. "),
+              plain = tagList(
                 "An undo, provided you asked for it in advance. Between ", kbd("BEGIN"),
                 " and ", kbd("COMMIT"), " your changes are provisional: you can see them, ",
                 "and ", kbd("ROLLBACK"), " makes them never have happened. The textbook ",
@@ -359,7 +359,7 @@ source_changing_server <- function(input, output, session) {
                 "both fail. The everyday case is step 4's advice, upgraded: ",
                 kbd("BEGIN"), ", run the ", kbd("DELETE"), ", look at the damage, and ",
                 "only then decide."),
-              lab = tagList(tags$b("Lab database. "),
+              lab = tagList(
                 "Run the four statements below one at a time. After the second, all 289 ",
                 "measurements are gone, and the count in the third confirms it. After the ",
                 "fourth they are back, and nobody at the institute need ever know.")
