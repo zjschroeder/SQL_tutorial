@@ -52,7 +52,15 @@ if (dir.exists("docs")) {
 # binaries (DBI, RSQLite, and their dependency closure) are downloaded from
 # repo.r-wasm.org at export time and bundled into docs/.
 message("Building static Shinylive bundle into docs/ ...")
-shinylive::export(appdir = stage, destdir = "docs", quiet = FALSE)
+# Pinned assets. shinylive 0.5.0 defaults to assets 0.10.12 (webR 0.6.0, R 4.6),
+# and the RSQLite build for R 4.6 on repo.r-wasm.org fails to load there
+# ("unable to load shared object .../RSQLite.so"), so the app never starts.
+# Assets 0.10.8 bundle webR 0.5.5 (R 4.5.1), where RSQLite loads and runs.
+# Override with the SHINYLIVE_ASSETS_VERSION environment variable to try a
+# newer version; open the browser console after deploying to confirm RSQLite loads.
+assets <- Sys.getenv("SHINYLIVE_ASSETS_VERSION", "0.10.8")
+message("Using Shinylive assets ", assets)
+shinylive::export(appdir = stage, destdir = "docs", quiet = FALSE, assets_version = assets)
 
 # GitHub Pages reads .nojekyll to skip Jekyll, which would otherwise ignore the
 # underscore-prefixed directories Shinylive emits (e.g. _modules).
